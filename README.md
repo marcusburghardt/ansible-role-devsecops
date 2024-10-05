@@ -39,8 +39,8 @@ None.
 Example Playbook
 ----------------
 
-This playbook will prepare everything with the right variables.  
-For this example, lets call this playbook file as "ansible_devsecops.yml":
+This Playbook will prepare everything with the right variables.
+For this example, lets call this Playbook file as "ansible_devsecops.yml":
 
 ---
 - hosts: linux
@@ -68,5 +68,6 @@ Author Information
 ------------------
 
 Marcus Burghardt
+- https://buymeacoffee.com/marcusburghardt
 - https://github.com/marcusburghardt/
 - https://www.linkedin.com/in/marcusburghardt/
