@@ -1,0 +1,25 @@
+---
+- name: "{{ role_name }} | {{ task.name }} | Get a list of all Podman images"
+  ansible.builtin.command: podman images --format "{{ '{{.Repository}}:{{.Tag}}' }}"
+  register: result_podman_images
+  changed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Set a fact composed by a list of found images"
+  ansible.builtin.set_fact:
+    podman_images: "{{ result_podman_images.stdout_lines }}"
+
+- name: "{{ role_name }} | {{ task.name }} | Update each Podman image"
+  ansible.builtin.command: podman pull {{ item }}
+  loop: "{{ podman_images }}"
+  when:
+    - item != "<none>:<none>"
+    - item is not match("localhost/*")
+  register: result_podman_pull
+  changed_when: "'Downloaded newer image' in result_podman_pull.stdout"
+  ignore_errors: true
+
+- name: "{{ role_name }} | {{ task.name }} | Prune outdated Vagrant images"
+  ansible.builtin.command: vagrant box prune
+  register: result_vagrant_prune
+  changed_when: "'No old versions of boxes to remove' not in result_vagrant_prune.stdout"
+...

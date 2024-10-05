@@ -6,10 +6,11 @@ Settings can be customized through variables. Take a look in the existing standa
 "defaults/main.yml" and overridden them in a Playbook.
 
 This role will:
-- Ensure desired repositories
-- Ensure desired packages
-- Customize VIM
-- Populate some useful scripts
+- Ensure a folder for DevSecOps stuff, by default in "~/DEVSecOps"
+- Populate the directory with Vagrant files
+- Install useful tools, such as podman, vagrant, git, etc
+- Update existing container images
+- Prune outdated Vagrant images
 
 To install this role:  
 ```$ ansible-galaxy role install marcusburghardt.devsecops```
@@ -45,11 +46,10 @@ For this example, lets call this Playbook file as "ansible_devsecops.yml":
 ---
 - hosts: linux
   vars:
-    - git_tasks:
-      - { enabled: true,  name: 'configure_repos' }
-      - { enabled: true,  name: 'install_packages' }
-      - { enabled: true,  name: 'configure_vim' }
-      - { enabled: true,  name: 'populate_scripts' }
+    devsecops_tasks:
+      - { enabled: true, name: 'install_tools' }
+      - { enabled: true, name: 'populate_dir' }
+      - { enabled: true, name: 'update_images' }
   roles:
     - marcusburghardt.devsecops
 

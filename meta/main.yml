@@ -13,5 +13,6 @@ galaxy_info:
   galaxy_tags:
     - devops
     - devsecops
+    - sysadmin
     - security
 dependencies: []

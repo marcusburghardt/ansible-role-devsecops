@@ -1,0 +1,28 @@
+---
+- name: "{{ role_name }} | {{ task.name }} | Ensure the base working directory for DevSecOps"
+  ansible.builtin.file:
+    path: "{{ devsecops_base_dir }}"
+    state: directory
+    mode: '0750'
+  register: result_devsecops_base_dir
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure Vagrant directory"
+  ansible.builtin.file:
+    path: "{{ devsecops_vagrant_dir }}"
+    state: directory
+    mode: '0750'
+  register: result_devsecops_vagrant_dir
+  when: result_devsecops_base_dir is success
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure the presence Vagrant files"
+  ansible.builtin.copy:
+    dest: "{{ devsecops_vagrant_dir }}"
+    mode: '0700'
+    src: "{{ role_path }}/files/Vagrant/{{ item.os }}"
+    force: true
+    backup: false
+  loop: "{{ devsecops_vagrant_dirs }}"
+  when:
+    - item.enabled
+    - result_devsecops_vagrant_dir is success
+...

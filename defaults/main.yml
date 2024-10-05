@@ -1,2 +1,16 @@
 ---
-# defaults file for ansible-role-devsecops
+# Role Defaults
+devsecops_tasks:
+  - { enabled: true, name: 'install_tools' }
+  - { enabled: true, name: 'populate_dir' }
+  - { enabled: true, name: 'update_images' }
+
+# Everything created by this role will be limited to this directory scope, except for
+# users and OS specific settings.
+devsecops_base_dir: "{{ ansible_facts['user_dir'] }}/DEVSecOps"
+devsecops_vagrant_dir: "{{ devsecops_base_dir }}/Vagrant"
+
+devsecops_vagrant_dirs:
+  - { enabled: true, state: 'present', os: 'Fedora' }
+  - { enabled: false, state: 'present', os: 'Kali' }
+  - { enabled: false, state: 'present', os: 'Ubuntu' }
