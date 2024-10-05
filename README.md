@@ -43,6 +43,7 @@ Example Playbook
 This Playbook will prepare everything with the right variables.
 For this example, lets call this Playbook file as "ansible_devsecops.yml":
 
+```
 ---
 - hosts: linux
   vars:
@@ -52,6 +53,7 @@ For this example, lets call this Playbook file as "ansible_devsecops.yml":
       - { enabled: true, name: 'update_images' }
   roles:
     - marcusburghardt.devsecops
+```
 
 Considering the inventory file is in the same folder and is called "hosts",
 you can now run this command:  
@@ -68,6 +70,6 @@ Author Information
 ------------------
 
 Marcus Burghardt
-- https://buymeacoffee.com/marcusburghardt
-- https://github.com/marcusburghardt/
-- https://www.linkedin.com/in/marcusburghardt/
+- [https://buymeacoffee.com/marcusburghardt](https://buymeacoffee.com/marcusburghardt)
+- [https://github.com/marcusburghardt](https://github.com/marcusburghardt)
+- [https://www.linkedin.com/in/marcusburghardt](https://www.linkedin.com/in/marcusburghardt)
