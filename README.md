@@ -11,6 +11,8 @@ This role will:
 - Install useful tools, such as podman, vagrant, git, etc
 - Update existing container images
 - Prune outdated Vagrant images
+- Configure custom environment variables and aliases defined by the user
+  - The PATH variable can also be managed by this role
 
 To install this role:  
 ```$ ansible-galaxy role install marcusburghardt.devsecops```
@@ -49,6 +51,7 @@ For this example, lets call this Playbook file as "ansible_devsecops.yml":
   vars:
     devsecops_tasks:
       - { enabled: true, name: 'install_tools' }
+      - { enabled: true, name: 'configure_env' }
       - { enabled: true, name: 'populate_dir' }
       - { enabled: true, name: 'update_images' }
   roles:

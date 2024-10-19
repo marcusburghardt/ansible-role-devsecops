@@ -1,0 +1,52 @@
+---
+- name: "{{ role_name }} | {{ task.name }} | Ensure custom environment aliases"
+  ansible.builtin.lineinfile:
+    dest: "{{ user_env_file }}"
+    state: present
+    regexp: ^alias {{ item.name }}=*
+    line: alias {{ item.name }}="{{ item.value }}"
+  loop: "{{ devsecops_env_aliases }}"
+  when:
+    - item.enabled
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure custom environment variables"
+  ansible.builtin.lineinfile:
+    dest: "{{ user_env_file }}"
+    state: present
+    regexp: ^export {{ item.name }}=*
+    line: export {{ item.name }}="{{ item.value }}"
+  loop: "{{ devsecops_env_variables }}"
+  when:
+    - item.enabled
+
+- name: "{{ role_name }} | {{ task.name }} | Check the existence of PATH environment variable"
+  ansible.builtin.replace:
+    dest: "{{ user_env_file }}"
+    regexp: '^export PATH='
+    replace: export PATH="$PATH"
+  check_mode: true
+  changed_when: false
+  register: result_env_path_check
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure the existence of PATH environment variable"
+  ansible.builtin.lineinfile:
+    dest: "{{ user_env_file }}"
+    state: present
+    line: 'export PATH="$PATH"'
+  register: result_env_path_ensure
+  when:
+    - result_env_path_check is not search("replacements made")
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure PATH environment variable is updated"
+  ansible.builtin.lineinfile:
+    dest: "{{ user_env_file }}"
+    state: present
+    backrefs: true
+    backup: true
+    regexp: 'export PATH=(["]*)((?!.*?{{ item.path }}).*?)(["]*)$'
+    line: 'export PATH=\1\2:{{ item.path }}\3'
+  loop: "{{ devsecops_env_path }}"
+  when:
+    - item.enabled
+    - result_env_path_ensure is success or result_env_path_ensure is skipped
+...

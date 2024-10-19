@@ -1,0 +1,5 @@
+---
+# This file has variables specific for the configure_env tasks.
+
+user_env_file: "{{ ansible_facts['user_dir'] }}/.bashrc"
+...
