@@ -17,7 +17,7 @@ devsecops_vagrant_dirs:
   - { enabled: false, state: 'present', os: 'Ubuntu' }
 
 devsecops_env_variables:
-  - { enabled: false, state: 'present', name: 'GOPATH', value: "$HOME/go" }
+  - { enabled: true, state: 'present', name: 'GOPATH', value: "$HOME/go" }
 
 devsecops_env_aliases:
   - { enabled: false, state: 'present', name: 'ls', value: "ls --color=auto" }

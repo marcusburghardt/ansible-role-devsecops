@@ -3,6 +3,7 @@
 
 packages:
   - git
+  - golang
   - podman
   - podman-compose
   - vagrant

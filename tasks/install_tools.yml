@@ -1,5 +1,5 @@
 ---
-- name: "{{ role_name }} | {{ task.name }} | Ensure useful packages are installed"
+- name: "{{ role_name }} | {{ task.name }} | Ensure packages are installed"
   become: true
   ansible.builtin.package:
     name: "{{ item }}"
