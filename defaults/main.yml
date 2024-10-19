@@ -23,5 +23,5 @@ devsecops_env_aliases:
   - { enabled: false, state: 'present', name: 'ls', value: "ls --color=auto" }
 
 devsecops_env_path:
-  - { enabled: false, path: '$HOME/scripts' }
+  - { enabled: true, path: '$GOPATH/bin' }
 ...
