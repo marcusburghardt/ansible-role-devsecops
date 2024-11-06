@@ -43,7 +43,7 @@
     state: present
     backrefs: true
     backup: true
-    regexp: 'export PATH=(["]*)((?!.*?{{ item.path }}).*?)(["]*)$'
+    regexp: 'export PATH=(["]*)((?!.*?{{ item.path | regex_escape }}).*?)(["]*)$'
     line: 'export PATH=\1\2:{{ item.path }}\3'
   loop: "{{ devsecops_env_path }}"
   when:
