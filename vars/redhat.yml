@@ -2,10 +2,12 @@
 # This file has the custom configurations for redhat and fedora.
 
 packages:
+  - cargo
   - git
   - golang
   - podman
   - podman-compose
+  - rust
   - vagrant
 
 ...
