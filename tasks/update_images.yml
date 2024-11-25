@@ -21,5 +21,7 @@
 - name: "{{ role_name }} | {{ task.name }} | Prune outdated Vagrant images"
   ansible.builtin.command: vagrant box prune
   register: result_vagrant_prune
-  changed_when: "'No old versions of boxes to remove' not in result_vagrant_prune.stdout"
+  changed_when:
+    - "'No old versions of boxes to remove' not in result_vagrant_prune.stdout"
+    - "'There are no installed boxes' not in result_vagrant_prune.stdout"
 ...
