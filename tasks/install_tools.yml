@@ -1,8 +1,26 @@
 ---
+- name: "{{ role_name }} | {{ task.name }} | Ensure YUM/DNF repositories"
+  become: true
+  ansible.builtin.yum_repository:
+    name: "{{ item.name }}"
+    description: "{{ item.description }}"
+    baseurl: "{{ item.repo }}"
+    gpgcheck: "{{ item.gpgcheck }}"
+    gpgkey: "{{ item.gpgkey }}"
+    enabled: true
+    state: "{{ item.state }}"
+  loop: "{{ devsecops_linux_repos }}"
+  register: result_repositories
+  when:
+    - item.enabled
+    - ansible_facts['os_family']|lower == "redhat"
+
 - name: "{{ role_name }} | {{ task.name }} | Ensure packages are installed"
   become: true
   ansible.builtin.package:
     name: "{{ item }}"
     state: present
   loop: "{{ packages }}"
+  when:
+    - result_repositories is success or result_repositories is skipped
 ...

@@ -24,4 +24,11 @@ devsecops_env_aliases:
 
 devsecops_env_path:
   - { enabled: true, path: '$GOPATH/bin' }
+
+devsecops_linux_repos:
+  - { enabled: false, state: 'present', name: 'RepoName',
+      description: 'Repository Description',
+      repo: 'https://repo.example.com/repo',
+      gpgcheck: '1',
+      gpgkey: 'https://repo.example.com/repo/keys/example.asc' }
 ...
