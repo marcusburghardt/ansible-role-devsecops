@@ -3,11 +3,11 @@
 
 packages:
   - cargo
+  - flatpak
   - git
   - golang
   - podman
   - podman-compose
   - rust
   - vagrant
-
 ...
