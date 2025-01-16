@@ -13,6 +13,7 @@ This role will:
 - Prune outdated Vagrant images
 - Configure custom environment variables and aliases defined by the user
   - The PATH variable can also be managed by this role
+- Create ~/.ssh/config file so users can define their own ssh settings
 
 To install this role:  
 ```$ ansible-galaxy role install marcusburghardt.devsecops```

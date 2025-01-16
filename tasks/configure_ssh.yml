@@ -1,0 +1,12 @@
+---
+- name: "{{ role_name }} | {{ task.name }} | Ensure custom SSH configuration"
+  ansible.builtin.lineinfile:
+    dest: "{{ user_ssh_config_file }}"
+    state: present
+    create: true
+    regexp: ^{{ item.name }}=*
+    line: "{{ item.name }}={{ item.value }}"
+  loop: "{{ devsecops_ssh_settings }}"
+  when:
+    - item.enabled
+...

@@ -3,6 +3,7 @@
 devsecops_tasks:
   - { enabled: true, name: 'install_tools' }
   - { enabled: true, name: 'configure_env' }
+  - { enabled: true, name: 'configure_ssh' }
   - { enabled: true, name: 'populate_dir' }
   - { enabled: true, name: 'update_images' }
 
@@ -31,4 +32,7 @@ devsecops_linux_repos:
       repo: 'https://repo.example.com/repo',
       gpgcheck: '1',
       gpgkey: 'https://repo.example.com/repo/keys/example.asc' }
+
+devsecops_ssh_settings:
+  - { enabled: true, state: 'present', name: 'VerifyHostKeyDNS', value: 'ask' }
 ...
