@@ -1,0 +1,5 @@
+---
+- name: "{{ role_name }} | {{ task.name }} | Ensure individual Python modules are installed"
+  ansible.builtin.pip:
+    name: "{{ devsecops_pip_modules }}"
+...
