@@ -8,6 +8,9 @@ packages:
   - golang
   - podman
   - podman-compose
+  - python3-pip
   - rust
+  - scancode-toolkit
+  - sqlitebrowser
   - vagrant
 ...
