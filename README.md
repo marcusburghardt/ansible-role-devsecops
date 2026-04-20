@@ -1,39 +1,77 @@
-Role Name
-=========
+marcusburghardt.devsecops
+=========================
 
-This Ansible Role will install packages and configure settings targeting DevSecOps activities.
-Settings can be customized through variables. Take a look in the existing standards defined in
-"defaults/main.yml" and overridden them in a Playbook.
+This Ansible role installs packages and configures settings targeting DevSecOps
+activities on Red Hat Enterprise Linux and Fedora systems. Settings are
+customizable through variables defined in `defaults/main.yml` or overridden in
+your playbook.
 
 This role will:
-- Ensure a folder for DevSecOps stuff, by default in "~/DEVSecOps"
-- Populate the directory with Vagrant files
-- Install useful tools, such as podman, vagrant, git, etc
-- Update existing container images
-- Prune outdated Vagrant images
+- Ensure a folder for DevSecOps stuff, by default in `~/DEVSecOps`;
+- Populate the directory with Vagrant files;
+- Install useful tools, such as podman, vagrant, git, etc;
+- Update existing container images;
+- Prune outdated Vagrant images;
 - Configure custom environment variables and aliases defined by the user
-  - The PATH variable can also be managed by this role
-- Create ~/.ssh/config file so users can define their own ssh settings
+  (the PATH variable can also be managed by this role);
+- Create `~/.ssh/config` file so users can define their own SSH settings.
 
-To install this role:  
-```$ ansible-galaxy role install marcusburghardt.devsecops```
+To install this role:
+```
+ansible-galaxy role install marcusburghardt.devsecops
+```
 
 Requirements
 ------------
 
-- python3
+- Python 3
+
+> **Platform support:** This role currently supports Red Hat Enterprise Linux (EL)
+> and Fedora only. There are no Debian/Ubuntu variables defined.
 
 Role Variables
 --------------
 
-You can customize your environment in a very simple and centralized way editing some variables in:
-- defaults/main.yml
+### Key Variables
 
-In some rare cases, you may change some configuration to reflect your local environment in:
-- vars/*.yml
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `devsecops_tasks` | List of tasks to run (see [Task Selection](#task-selection)) | All 6 tasks enabled |
+| `devsecops_base_dir` | Base directory for DevSecOps content | `~/DEVSecOps` |
+| `devsecops_vagrant_dir` | Vagrant files directory | `~/DEVSecOps/Vagrant` |
+| `devsecops_vagrant_dirs` | Vagrant OS directories to create | Fedora enabled |
+| `devsecops_env_variables` | Custom environment variables for `~/.bashrc` | `GOPATH` enabled |
+| `devsecops_env_aliases` | Custom aliases for `~/.bashrc` | None enabled |
+| `devsecops_env_path` | PATH additions for `~/.bashrc` | `$GOPATH/bin` |
+| `devsecops_linux_repos` | Additional YUM/DNF repositories | None enabled |
+| `devsecops_ssh_settings` | SSH config entries for `~/.ssh/config` | `VerifyHostKeyDNS` enabled |
+| `devsecops_pip_modules` | Python modules to install via pip | `setuptools` |
 
-Observe that the above variables could be set in your Playbook too, which is much more elegant. ;)  
-Take a look in the Example Playbook section.
+### Task Selection
+
+The role uses a task dispatcher pattern. Each task can be individually enabled or
+disabled via the `devsecops_tasks` variable:
+
+```yaml
+devsecops_tasks:
+  - { enabled: true, name: 'install_tools' }
+  - { enabled: true, name: 'configure_env' }
+  - { enabled: true, name: 'configure_ssh' }
+  - { enabled: true, name: 'pip_install_modules' }
+  - { enabled: true, name: 'populate_dir' }
+  - { enabled: true, name: 'update_images' }
+```
+
+| Task | Purpose |
+|------|---------|
+| `install_tools` | Add YUM/DNF repositories and install packages |
+| `configure_env` | Configure environment variables, aliases, and PATH in `~/.bashrc` |
+| `configure_ssh` | Create/update `~/.ssh/config` with custom settings |
+| `pip_install_modules` | Install Python modules via pip |
+| `populate_dir` | Create DevSecOps directories and deploy Vagrant files |
+| `update_images` | Update Podman container images and prune Vagrant boxes |
+
+Set `enabled: false` on any task to skip it.
 
 Dependencies
 ------------
@@ -43,10 +81,7 @@ None.
 Example Playbook
 ----------------
 
-This Playbook will prepare everything with the right variables.
-For this example, lets call this Playbook file as "ansible_devsecops.yml":
-
-```
+```yaml
 ---
 - hosts: linux
   vars:
@@ -55,20 +90,41 @@ For this example, lets call this Playbook file as "ansible_devsecops.yml":
       - { enabled: true, name: 'configure_env' }
       - { enabled: true, name: 'populate_dir' }
       - { enabled: true, name: 'update_images' }
+      - { enabled: false, name: 'configure_ssh' }
+      - { enabled: false, name: 'pip_install_modules' }
   roles:
     - marcusburghardt.devsecops
 ```
 
-Considering the inventory file is in the same folder and is called "hosts",
-you can now run this command:  
-```$ ansible-playbook -K -i hosts ansible_devsecops.yml```
+Commit Standards
+----------------
+
+This project follows the [Conventional Commits](https://www.conventionalcommits.org/)
+specification. All commits to `main` must use the format:
+
+```
+<type>[optional scope]: <description>
+```
+
+Common types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`.
+
+Release Process
+---------------
+
+This project uses [release-please](https://github.com/googleapis/release-please)
+for automated versioning and changelog generation. Commits to `main` must follow
+the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+
+When a release PR is merged, a GitHub Release is created automatically, which
+triggers publishing to Ansible Galaxy.
+
+**Note:** The `GALAXY_API_KEY` repository secret must be configured for Galaxy
+publishing to work.
 
 License
 -------
 
-This Source Code Form is subject to the terms of the Mozilla Public
-License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at http://mozilla.org/MPL/2.0/.
+Apache-2.0
 
 Author Information
 ------------------

@@ -1,7 +1,8 @@
+---
 galaxy_info:
   author: Marcus Burghardt
-  description: Role for prepare an entire DevSecOps environment.
-  license: MPL
+  description: Role for preparing an entire DevSecOps environment.
+  license: Apache-2.0
   min_ansible_version: '2.16'
   platforms:
     - name: EL
