@@ -7,6 +7,7 @@ devsecops_tasks:
   - { enabled: true, name: 'pip_install_modules' }
   - { enabled: true, name: 'populate_dir' }
   - { enabled: true, name: 'update_images' }
+  - { enabled: false, name: 'manage_galaxy_roles' }
 
 # Everything created by this role will be limited to this directory scope, except for
 # users and OS specific settings.
@@ -39,4 +40,12 @@ devsecops_ssh_settings:
 
 devsecops_pip_modules:
   - setuptools
+
+# Directory to store supporting scripts.
+devsecops_scripts_dir: "{{ ansible_facts['user_dir'] }}/bin"
+
+# Galaxy roles to install and keep updated.
+# Each entry supports 'name' (required) and 'version' (optional, defaults to latest).
+devsecops_galaxy_roles: []
+devsecops_galaxy_requirements_dir: "{{ playbook_dir }}"
 ...

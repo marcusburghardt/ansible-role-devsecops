@@ -1,0 +1,10 @@
+{{ ansible_managed | comment }}
+---
+roles:
+{% for role in devsecops_galaxy_roles %}
+  - name: {{ role.name }}
+{% if role.version is defined %}
+    version: "{{ role.version }}"
+{% endif %}
+{% endfor %}
+...
