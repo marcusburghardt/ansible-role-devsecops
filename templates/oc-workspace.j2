@@ -18,4 +18,6 @@ if printf '%s\n' "${sessions}" | grep --fixed-strings --quiet --line-regexp "${S
     exec zellij attach "${SESSION}"
 fi
 
-exec zellij --session "${SESSION}" --layout "${LAYOUT}"
+# --new-session-with-layout creates the session; --layout alone only appends a
+# tab to an existing session and fails when the session does not exist.
+exec zellij --session "${SESSION}" --new-session-with-layout "${LAYOUT}"

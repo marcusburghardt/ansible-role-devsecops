@@ -60,7 +60,7 @@ Role Variables
 | `devsecops_kitty_config_src` | Deploy this kitty.conf file verbatim instead of the rendered one | Empty (rendered) |
 | `devsecops_kitty_font_family` / `_font_size` | kitty font settings | `monospace` / `11.0` |
 | `devsecops_kitty_background_opacity` | kitty window opacity | `0.95` |
-| `devsecops_kitty_hide_tab_bar` | Hide the kitty tab bar (zellij owns tabs) | `true` |
+| `devsecops_kitty_hide_tab_bar` | Hide the kitty tab bar even in multi-tab windows | `false` |
 | `devsecops_kitty_launch_keybind` | kitty keybind that opens the workspace | `ctrl+shift+enter` |
 | `devsecops_zellij_config_src` | Deploy this config.kdl verbatim instead of the rendered one | Empty (rendered) |
 | `devsecops_zellij_theme` | Zellij theme name | Empty (zellij default) |
@@ -136,7 +136,9 @@ Terminal Workspace
 
 The `install_terminal` and `configure_terminal` tasks build a multi-repository
 OpenCode workspace: one kitty window running a persistent zellij session,
-with one OpenCode pane per repository.
+with one OpenCode pane per repository. The workspace window shows no kitty tab
+bar because it has a single tab (kitty's default `tab_bar_min_tabs 2`); kitty
+tabs in normal windows are unaffected.
 
 ```
 ┌─ kitty (tabs hidden) ──────────────────────────────┐

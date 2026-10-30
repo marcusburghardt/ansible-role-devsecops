@@ -2,8 +2,15 @@
 // {{ ansible_managed }}
 // Mirrors OpenCode session state into zellij pane titles (badges) and
 // raises desktop notifications. Deployed by ansible-role-devsecops.
-// This plugin is self-contained: it imports nothing and every failure is
-// best-effort, so it can never break an OpenCode session.
+//
+// OpenCode V2 plugin contract: default-export a definition with an id and a
+// setup(ctx) function. Events arrive as { type, data, location? } and the
+// turn lifecycle is session.execution.started / .succeeded / .failed /
+// .interrupted (there is no session.status or session.idle in V2). Events
+// are delivered once per plugin instance, so badge transitions are deduped.
+//
+// This plugin is self-contained (no imports) and best-effort: no failure in
+// it can ever break an OpenCode session.
 
 const BADGES = {
   busy: "{{ devsecops_workspace_badges.busy }}",
@@ -28,125 +35,204 @@ const repoName = (directory: string): string => {
   return parts.length > 0 ? parts[parts.length - 1] : directory;
 };
 
-export const ZellijAttention = async (ctx: any) => {
-  const { client, $ } = ctx;
-  const notifiedPermissions = new Set<string>();
+// Runs a command and returns its stdout, or an empty string on any failure.
+const run = async (argv: string[]): Promise<string> => {
+  try {
+    const proc = Bun.spawn(argv, { stdout: "pipe", stderr: "ignore" });
+    const output = await new Response(proc.stdout).text();
+    const code = await proc.exited;
+    return code === 0 ? output : "";
+  } catch {
+    return "";
+  }
+};
 
-  const sessionDirectory = async (sessionID: string | undefined): Promise<string | null> => {
-    if (!sessionID) return null;
-    try {
-      const response = await client.session.get({ path: { id: sessionID } });
-      const directory = response?.data?.directory;
-      return typeof directory === "string" ? normalize(directory) : null;
-    } catch {
-      return null;
-    }
-  };
+export default {
+  id: "devsecops.zellij-attention",
 
-  const zellijSessions = async (): Promise<string[]> => {
-    try {
-      const output = await $`zellij list-sessions --no-formatting --short`.nothrow().text();
-      return output.split("\n").map((line) => line.trim()).filter(Boolean);
-    } catch {
-      return [];
-    }
-  };
+  setup(ctx: any) {
+    const controller = new AbortController();
 
-  const zellijPanes = async (session: string): Promise<ZellijPane[]> => {
-    try {
-      const output = await $`zellij --session ${session} action list-panes --all --json`.nothrow().text();
-      const parsed = JSON.parse(output);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  };
+    // sessionID -> project directory. Learned from events that carry a
+    // location (session.created, session.renamed, ...) and from
+    // ctx.session.get, whose session carries location.directory.
+    const directories = new Map<string, string>();
 
-  const renamePane = async (session: string, paneID: number, title: string): Promise<void> => {
-    try {
-      await $`zellij --session ${session} action rename-pane --pane-id ${String(paneID)} ${title}`.nothrow();
-    } catch {
-      // Badge updates are best-effort.
-    }
-  };
+    // Badge transitions are deduped per session: events arrive once per
+    // plugin instance, and a repeated state must not re-notify.
+    const lastBadge = new Map<string, string>();
+    const notifiedPermissions = new Set<string>();
 
-  const notify = async (title: string, body: string): Promise<void> => {
-    try {
-      await $`${NOTIFY_COMMAND} -a OpenCode ${title} ${body}`.nothrow();
-    } catch {
-      // Notifications are best-effort.
-    }
-  };
-
-  // Rename the pane whose working directory matches the project directory in
-  // every zellij session that contains it. Returns the focus state of the
-  // matched pane (null when no pane matched).
-  const markPanes = async (directory: string, badge: string): Promise<boolean | null> => {
-    const title = `${badge} ${repoName(directory)}`;
-    for (const session of await zellijSessions()) {
-      for (const pane of await zellijPanes(session)) {
-        if (pane.is_plugin) continue;
-        if (normalize(pane.pane_cwd ?? "") !== directory) continue;
-        await renamePane(session, pane.id, title);
-        return pane.is_focused;
+    const learnDirectory = (event: any, sessionID: string | undefined): void => {
+      const directory = event?.location?.directory;
+      if (sessionID && typeof directory === "string" && directory.length > 0) {
+        directories.set(sessionID, normalize(directory));
       }
-    }
-    return null;
-  };
+    };
 
-  return {
-    event: async ({ event }: { event: { type: string; properties: any } }) => {
-      const type = event.type;
-      const properties = event.properties ?? {};
+    const directoryFor = async (event: any, sessionID?: string): Promise<string | null> => {
+      if (!sessionID) return null;
+      const cached = directories.get(sessionID);
+      if (cached) return cached;
+      try {
+        const session = await ctx.session.get({ sessionID });
+        const directory = session?.location?.directory ?? session?.directory;
+        if (typeof directory === "string" && directory.length > 0) {
+          directories.set(sessionID, normalize(directory));
+          return directories.get(sessionID) as string;
+        }
+      } catch {
+        // Best effort: fall through to the event location.
+      }
+      const fromEvent = event?.location?.directory;
+      return typeof fromEvent === "string" && fromEvent.length > 0
+        ? normalize(fromEvent)
+        : null;
+    };
 
-      if (type === "session.status") {
-        const status = properties.status?.type;
-        if (status === "busy" || status === "retry") {
-          const directory = await sessionDirectory(properties.sessionID);
-          if (directory) await markPanes(directory, BADGES.busy);
+    const zellijSessions = async (): Promise<string[]> =>
+      (await run(["zellij", "list-sessions", "-n", "-s"]))
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith("No active zellij sessions"));
+
+    const zellijPanes = async (session: string): Promise<ZellijPane[]> => {
+      const output = await run([
+        "zellij", "--session", session, "action", "list-panes", "-a", "-j",
+      ]);
+      try {
+        const parsed = JSON.parse(output);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
+
+    // Renames the pane whose working directory matches the project directory
+    // in every zellij session that contains it. Returns the focus state of
+    // the matched pane (null when no pane matched).
+    const markPanes = async (directory: string, badge: string): Promise<boolean | null> => {
+      const title = `${badge} ${repoName(directory)}`;
+      for (const session of await zellijSessions()) {
+        for (const pane of await zellijPanes(session)) {
+          if (pane.is_plugin) continue;
+          if (normalize(pane.pane_cwd ?? "") !== directory) continue;
+          await run([
+            "zellij", "--session", session, "action", "rename-pane",
+            "-p", String(pane.id), title,
+          ]);
+          return pane.is_focused === true;
+        }
+      }
+      return null;
+    };
+
+    const notify = async (title: string, body: string): Promise<void> => {
+      await run([NOTIFY_COMMAND, "-a", "OpenCode", title, body]);
+    };
+
+    // Applies a badge transition once per session state and raises the
+    // matching notification. policy: "never" (badge only), "always", or
+    // "unfocused" (only when the matched pane is not focused).
+    const applyBadge = async (
+      sessionID: string,
+      directory: string,
+      badge: string,
+      policy: "never" | "always" | "unfocused",
+      body: string,
+    ): Promise<void> => {
+      if (lastBadge.get(sessionID) === badge) return;
+      lastBadge.set(sessionID, badge);
+      const focused = await markPanes(directory, badge);
+      if (focused === null || policy === "never") return;
+      if (policy === "always" || !focused || NOTIFY_IDLE_WHEN_FOCUSED) {
+        await notify(`${badge} ${repoName(directory)}`, body);
+      }
+    };
+
+    const handleEvent = async (event: any): Promise<void> => {
+      const properties = event.data ?? event.properties ?? event;
+      const sessionID = properties.sessionID;
+      learnDirectory(event, sessionID);
+
+      if (event.type === "session.execution.started") {
+        const directory = await directoryFor(event, sessionID);
+        if (directory) {
+          await applyBadge(sessionID, directory, BADGES.busy, "never", "");
         }
         return;
       }
 
-      if (type === "permission.updated" || type === "permission.asked") {
-        const directory = await sessionDirectory(properties.sessionID);
+      if (event.type === "session.execution.succeeded") {
+        const directory = await directoryFor(event, sessionID);
+        if (directory) {
+          await applyBadge(
+            sessionID, directory, BADGES.done, "unfocused",
+            "Session finished and is waiting for you.",
+          );
+        }
+        return;
+      }
+
+      if (event.type === "session.execution.interrupted") {
+        const directory = await directoryFor(event, sessionID);
+        if (directory) {
+          await applyBadge(sessionID, directory, BADGES.done, "never", "");
+        }
+        return;
+      }
+
+      if (event.type === "session.execution.failed" || event.type === "session.error") {
+        const directory = await directoryFor(event, sessionID);
+        if (directory) {
+          await applyBadge(
+            sessionID, directory, BADGES.error, "always",
+            "Session reported an error.",
+          );
+        }
+        return;
+      }
+
+      if (event.type === "permission.asked") {
+        const directory = await directoryFor(event, sessionID);
         if (!directory) return;
-        const focused = await markPanes(directory, BADGES.waiting);
-        const permissionID = properties.id ?? properties.permissionID ?? "";
-        const alreadyNotified = permissionID !== "" && notifiedPermissions.has(permissionID);
+        const permissionID = properties.id ?? "";
+        const alreadyNotified =
+          permissionID !== "" && notifiedPermissions.has(permissionID);
         if (permissionID !== "") notifiedPermissions.add(permissionID);
+        await applyBadge(sessionID, directory, BADGES.waiting, "never", "");
         if (alreadyNotified) return;
         const pattern = Array.isArray(properties.pattern)
           ? properties.pattern.join(" ")
           : (properties.pattern ?? "");
         const detail = properties.title ?? "Permission requested";
-        void focused;
-        await notify(`${BADGES.waiting} ${repoName(directory)}`, pattern ? `${detail}: ${pattern}` : detail);
+        await notify(
+          `${BADGES.waiting} ${repoName(directory)}`,
+          pattern ? `${detail}: ${pattern}` : detail,
+        );
         return;
       }
 
-      if (type === "permission.replied") {
-        notifiedPermissions.delete(properties.permissionID ?? "");
-        return;
-      }
-
-      if (type === "session.idle") {
-        const directory = await sessionDirectory(properties.sessionID);
-        if (!directory) return;
-        const focused = await markPanes(directory, BADGES.done);
-        if (focused !== null && (!focused || NOTIFY_IDLE_WHEN_FOCUSED)) {
-          await notify(`${BADGES.done} ${repoName(directory)}`, "Session is idle and waiting for you.");
+      if (event.type === "permission.replied") {
+        notifiedPermissions.delete(properties.requestID ?? "");
+        const directory = await directoryFor(event, sessionID);
+        if (directory) {
+          await applyBadge(sessionID, directory, BADGES.busy, "never", "");
         }
         return;
       }
+    };
 
-      if (type === "session.error") {
-        const directory = await sessionDirectory(properties.sessionID);
-        if (!directory) return;
-        await markPanes(directory, BADGES.error);
-        await notify(`${BADGES.error} ${repoName(directory)}`, "Session reported an error.");
-        return;
+    void (async () => {
+      for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+        try {
+          await handleEvent(event);
+        } catch {
+          // Best-effort: a failure in one event must not break the loop.
+        }
       }
-    },
-  };
+    })();
+
+    return () => controller.abort();
+  },
 };

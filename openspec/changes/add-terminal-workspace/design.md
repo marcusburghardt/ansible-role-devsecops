@@ -212,7 +212,27 @@ Backups plus a diff dry-run make that transition recoverable.
   end-artifact verification.
 - **[Layout KDL syntax (`args`, nesting) is unvalidated against 0.45.1]**
   → Validation is a manual acceptance step in tasks.md; there is no CLI
-  layout validator, and session creation needs a TTY.
+  layout validator, and session creation needs a TTY. (Validated after the
+  0.3.0 release: the layout parses and spawns panes correctly; the actual
+  runtime bug was the session-creation flag, see below.)
+- **[Zellij 0.45 session-creation semantics]** → Found after 0.3.0: with
+  `--session <name>`, `--layout <name>` only appends a tab to an existing
+  session and errors out ("Session not found") when the session does not
+  exist. The launcher must use `--new-session-with-layout` to create the
+  session. Verified against zellij 0.45.1 under a pseudo-TTY.
+- **[OpenCode V2 plugin contract drift]** → Found after 0.3.0: OpenCode 2.x
+  rejects v1-style plugin factories ("Plugin must export a default definition
+  with an id and an effect or setup function"). The plugin was ported to the
+  v2 contract, verified live against a running 2.2.3 server: default-exported
+  `{ id, setup(ctx) }`, events via `ctx.event.subscribe({ signal })` with an
+  abort-based cleanup, session directory via `ctx.session.get({ sessionID })`
+  → `session.location.directory` (plus a cache fed by events that carry
+  `location.directory`), and commands through `Bun.spawn` (the v1 `$` helper
+  no longer exists). The v1 `session.status` / `session.idle` /
+  `permission.updated` events do not exist in v2; the turn lifecycle is
+  `session.execution.started / .succeeded / .failed / .interrupted`, with
+  `permission.asked` / `permission.replied` for prompts. Events are delivered
+  once per plugin instance, so badge transitions are deduped per session.
 - **[OpenCode V2 plugin API drift]** → Zero-import plugin, defensive
   `try/catch`, and the task is opt-out; failure degrades to missing badges.
 - **[Desktop notifications depend on the server's DBus session]** →

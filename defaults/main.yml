@@ -73,7 +73,10 @@ devsecops_kitty_window_padding: 6
 devsecops_kitty_launch_keybind: "ctrl+shift+enter"
 devsecops_kitty_remote_control: true
 devsecops_kitty_listen_on: "unix:@kitty"
-devsecops_kitty_hide_tab_bar: true
+# kitty hides the tab bar automatically for single-tab windows via its default
+# 'tab_bar_min_tabs 2', which is what the zellij workspace relies on. Enable
+# this only to hide the tab bar even in multi-tab windows.
+devsecops_kitty_hide_tab_bar: false
 devsecops_kitty_config_extra: ""
 
 # zellij configuration. When 'devsecops_zellij_config_src' points to a file
