@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/marcusburghardt/ansible-role-devsecops/compare/v0.2.0...v0.3.0) (2026-10-30)
+
+
+### Features
+
+* add terminal workspace change proposal ([98a45ce](https://github.com/marcusburghardt/ansible-role-devsecops/commit/98a45ce426e64734f6970d5d356738aeb378f510))
+* add terminal workspace tasks for kitty, zellij and OpenCode ([7a93868](https://github.com/marcusburghardt/ansible-role-devsecops/commit/7a93868cdad9226043cd778ab257df806f245889))
+
+
+### Miscellaneous
+
+* **deps:** bump actions/setup-python from 7.0.0 to 7.1.0 ([314a0a1](https://github.com/marcusburghardt/ansible-role-devsecops/commit/314a0a163fd2a791e7739eae7e60b034803a18ef))
+* **deps:** bump actions/setup-python from 7.0.0 to 7.1.0 ([88feefb](https://github.com/marcusburghardt/ansible-role-devsecops/commit/88feefbb0bfddba6638ff97e846eecf190de89cc))
+
 ## [0.2.0](https://github.com/marcusburghardt/ansible-role-devsecops/compare/v0.1.0...v0.2.0) (2026-10-05)
 
 
