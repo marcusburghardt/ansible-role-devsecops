@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Attach to the OpenCode workspace session, or create it with the layout.
+set -euo pipefail
+
+SESSION="{{ devsecops_workspace_name }}"
+LAYOUT="{{ devsecops_workspace_layout_name }}"
+KITTY_CLASS="{{ devsecops_workspace_kitty_class }}"
+
+# When started outside a terminal (e.g. from a desktop entry), re-exec inside
+# a new kitty window. OC_WORKSPACE_IN_KITTY guards against recursion.
+if [[ -z "${KITTY_WINDOW_ID:-}" && "${OC_WORKSPACE_IN_KITTY:-}" != "1" ]]; then
+    exec kitty --class "${KITTY_CLASS}" -- env OC_WORKSPACE_IN_KITTY=1 "$0" "$@"
+fi
+
+sessions="$(zellij list-sessions --no-formatting --short 2>/dev/null || true)"
+if printf '%s\n' "${sessions}" | grep --fixed-strings --quiet --line-regexp "${SESSION}"; then
+    exec zellij attach "${SESSION}"
+fi
+
+exec zellij --session "${SESSION}" --layout "${LAYOUT}"

@@ -1,0 +1,3 @@
+{{ ansible_managed | comment }}
+
+{{ lookup('ansible.builtin.file', devsecops_kitty_config_src) }}

@@ -1,0 +1,32 @@
+{{ ansible_managed | comment }}
+
+# Font
+font_family {{ devsecops_kitty_font_family }}
+font_size {{ devsecops_kitty_font_size }}
+
+# Window
+background_opacity {{ devsecops_kitty_background_opacity }}
+window_padding_width {{ devsecops_kitty_window_padding }}
+confirm_os_window_close 0
+enable_audio_bell no
+sync_to_monitor yes
+
+{% if devsecops_kitty_hide_tab_bar %}
+# zellij owns tab and pane management inside the workspace
+tab_bar_style hidden
+{% endif %}
+# Shell integration enables cwd tracking used by kitten tooling
+shell_integration enabled
+
+{% if devsecops_kitty_remote_control %}
+# Remote control over a per-user socket (used by kitten tooling)
+allow_remote_control socket-only
+listen_on {{ devsecops_kitty_listen_on }}
+{% endif %}
+# Launch the OpenCode workspace in a new window
+map {{ devsecops_kitty_launch_keybind }} launch --type=os-window {{ user_workspace_launcher }}
+
+{% if devsecops_kitty_config_extra | length > 0 %}
+# Extra user configuration
+{{ devsecops_kitty_config_extra }}
+{% endif %}

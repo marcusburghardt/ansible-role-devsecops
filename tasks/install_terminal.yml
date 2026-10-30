@@ -1,0 +1,163 @@
+---
+- name: "{{ role_name }} | {{ task.name }} | Ensure terminal packages are installed"
+  become: true
+  ansible.builtin.package:
+    name: "{{ devsecops_terminal_packages }}"
+    state: present
+
+- name: "{{ role_name }} | {{ task.name }} | Resolve the Zellij version to install"
+  when: devsecops_zellij_version == 'latest'
+  block:
+    - name: "{{ role_name }} | {{ task.name }} | Query the GitHub API for the latest Zellij release"
+      ansible.builtin.uri:
+        url: "{{ devsecops_zellij_latest_release_url }}"
+        return_content: true
+      register: result_zellij_latest_release
+      changed_when: false
+
+    - name: "{{ role_name }} | {{ task.name }} | Set the resolved Zellij version to the latest release tag"
+      ansible.builtin.set_fact:
+        _devsecops_zellij_resolved_version: "{{ result_zellij_latest_release.json.tag_name }}"
+
+- name: "{{ role_name }} | {{ task.name }} | Set the resolved Zellij version to the pinned value"
+  ansible.builtin.set_fact:
+    _devsecops_zellij_resolved_version: "{{ devsecops_zellij_version }}"
+  when: devsecops_zellij_version != 'latest'
+
+- name: "{{ role_name }} | {{ task.name }} | Check the installed Zellij version"
+  ansible.builtin.command:
+    cmd: zellij --version
+  register: result_zellij_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Determine whether Zellij needs to be installed or updated"
+  ansible.builtin.set_fact:
+    _devsecops_zellij_install_needed: >-
+      {{ result_zellij_installed_version.rc != 0
+         or (result_zellij_installed_version.stdout | regex_replace('^zellij v?', '') | trim)
+            != (_devsecops_zellij_resolved_version | regex_replace('^v', '')) }}
+
+- name: "{{ role_name }} | {{ task.name }} | Set the Zellij release URLs"
+  ansible.builtin.set_fact:
+    _devsecops_zellij_tarball_url: "{{ devsecops_zellij_download_base }}/{{ _devsecops_zellij_resolved_version }}/zellij-{{ ansible_facts['architecture'] }}-unknown-linux-musl.tar.gz"
+    _devsecops_zellij_checksum_url: "{{ devsecops_zellij_download_base }}/{{ _devsecops_zellij_resolved_version }}/zellij-{{ ansible_facts['architecture'] }}-unknown-linux-musl.sha256sum"
+
+- name: "{{ role_name }} | {{ task.name }} | Install or update Zellij from the release binary"
+  when: _devsecops_zellij_install_needed | bool
+  block:
+    - name: "{{ role_name }} | {{ task.name }} | Create a temporary directory for the Zellij download"
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: devsecops-zellij.
+      register: result_zellij_download_dir
+
+    - name: "{{ role_name }} | {{ task.name }} | Read the Zellij release checksum"
+      ansible.builtin.uri:
+        url: "{{ _devsecops_zellij_checksum_url }}"
+        return_content: true
+      register: result_zellij_checksum
+      changed_when: false
+
+    - name: "{{ role_name }} | {{ task.name }} | Assert the release checksum was read"
+      ansible.builtin.assert:
+        that:
+          - result_zellij_checksum.content is match('^[0-9a-f]{64}')
+        fail_msg: >-
+          Could not read a sha256 checksum from {{ _devsecops_zellij_checksum_url }}.
+
+    - name: "{{ role_name }} | {{ task.name }} | Download the Zellij release tarball"
+      ansible.builtin.get_url:
+        url: "{{ _devsecops_zellij_tarball_url }}"
+        dest: "{{ result_zellij_download_dir.path }}/zellij.tar.gz"
+        mode: '0644'
+
+    - name: "{{ role_name }} | {{ task.name }} | Extract the Zellij binary"
+      ansible.builtin.unarchive:
+        src: "{{ result_zellij_download_dir.path }}/zellij.tar.gz"
+        dest: "{{ result_zellij_download_dir.path }}"
+        remote_src: true
+        mode: '0755'
+
+    - name: "{{ role_name }} | {{ task.name }} | Compute the checksum of the extracted binary"
+      ansible.builtin.stat:
+        path: "{{ result_zellij_download_dir.path }}/zellij"
+        checksum_algorithm: sha256
+      register: result_zellij_binary_checksum
+
+    - name: "{{ role_name }} | {{ task.name }} | Verify the extracted binary against the release checksum"
+      ansible.builtin.assert:
+        that:
+          - result_zellij_binary_checksum.stat.checksum == result_zellij_checksum.content.split()[0]
+        success_msg: >-
+          Zellij binary checksum verified against {{ _devsecops_zellij_checksum_url }}.
+        fail_msg: >-
+          Checksum mismatch for the downloaded Zellij binary. Expected
+          {{ result_zellij_checksum.content.split()[0] }}, got
+          {{ result_zellij_binary_checksum.stat.checksum | default('unknown') }}.
+
+    - name: "{{ role_name }} | {{ task.name }} | Ensure the Zellij installation directory"
+      become: true
+      ansible.builtin.file:
+        path: "{{ devsecops_zellij_install_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: "{{ role_name }} | {{ task.name }} | Install the Zellij binary"
+      become: true
+      ansible.builtin.copy:
+        src: "{{ result_zellij_download_dir.path }}/zellij"
+        dest: "{{ devsecops_zellij_install_dir }}/zellij"
+        mode: '0755'
+        remote_src: true
+
+  always:
+    - name: "{{ role_name }} | {{ task.name }} | Remove the temporary download directory"
+      ansible.builtin.file:
+        path: "{{ result_zellij_download_dir.path }}"
+        state: absent
+      when: result_zellij_download_dir.path is defined
+
+- name: "{{ role_name }} | {{ task.name }} | Verify that kitty and zellij resolve on PATH"
+  ansible.builtin.command:
+    argv:
+      - bash
+      - -lc
+      - command -v kitty && command -v zellij
+  changed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Verify the resolved Zellij version"
+  ansible.builtin.command:
+    cmd: zellij --version
+  changed_when: false
+  register: result_zellij_version_verify
+
+- name: "{{ role_name }} | {{ task.name }} | Assert the resolved Zellij version matches the target"
+  ansible.builtin.assert:
+    that:
+      - result_zellij_version_verify.stdout | regex_replace('^zellij v?', '') | trim == _devsecops_zellij_resolved_version | regex_replace('^v', '')
+    success_msg: >-
+      Zellij {{ _devsecops_zellij_resolved_version }} is installed and resolves on PATH.
+    fail_msg: >-
+      'zellij --version' reports '{{ result_zellij_version_verify.stdout | trim }}' but the
+      target version is '{{ _devsecops_zellij_resolved_version }}'. If zellij resolves to a
+      snap binary, check PATH order: {{ devsecops_zellij_install_dir }}/zellij should take
+      precedence over /var/lib/snapd/snap/bin.
+
+- name: "{{ role_name }} | {{ task.name }} | Locate the resolved Zellij binary"
+  ansible.builtin.command:
+    argv:
+      - bash
+      - -lc
+      - command -v zellij
+  changed_when: false
+  register: result_zellij_path
+
+- name: "{{ role_name }} | {{ task.name }} | Warn about a snap-installed Zellij taking precedence"
+  ansible.builtin.debug:
+    msg: >-
+      Zellij resolves to {{ result_zellij_path.stdout }}, which appears to be a snap
+      installation. The role installed {{ devsecops_zellij_install_dir }}/zellij, which
+      takes precedence in the default PATH. Remove the snap with 'snap remove zellij'
+      to keep a single installation.
+  when: "'snapd/snap/bin' in result_zellij_path.stdout"

@@ -202,9 +202,14 @@ Backups plus a diff dry-run make that transition recoverable.
   adapt.
 - **[GitHub API rate limits for `latest`]** → Same accepted trade-off as
   `install_speckit` in `ansible-role-ai`; pinning avoids the call.
-- **[Checksum URL format]** → The release `.sha256sum` assets contain
-  `<hash>  <filename>`; if `get_url` cannot parse the URL form, fall back
-  to reading the asset into a variable and passing the literal hash.
+- **[Checksum asset semantics]** → Verified during implementation: the release
+  `.sha256sum` assets checksum the binary inside the tarball (the line
+  references the cargo build path, e.g.
+  `target/x86_64-unknown-linux-musl/release/zellij`), not the tarball, so
+  `get_url`'s checksum matching cannot use them. The task therefore
+  downloads the tarball, extracts it, and verifies the extracted binary's
+  sha256 (via `stat`) against the value read with `uri` — a stronger
+  end-artifact verification.
 - **[Layout KDL syntax (`args`, nesting) is unvalidated against 0.45.1]**
   → Validation is a manual acceptance step in tasks.md; there is no CLI
   layout validator, and session creation needs a TTY.

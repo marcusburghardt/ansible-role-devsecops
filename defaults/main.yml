@@ -8,6 +8,8 @@ devsecops_tasks:
   - { enabled: true, name: 'populate_dir' }
   - { enabled: true, name: 'update_images' }
   - { enabled: false, name: 'manage_galaxy_roles' }
+  - { enabled: false, name: 'install_terminal' }
+  - { enabled: false, name: 'configure_terminal' }
 
 # Everything created by this role will be limited to this directory scope, except for
 # users and OS specific settings.
@@ -48,4 +50,69 @@ devsecops_scripts_dir: "{{ ansible_facts['user_dir'] }}/bin"
 # Each entry supports 'name' (required) and 'version' (optional, defaults to latest).
 devsecops_galaxy_roles: []
 devsecops_galaxy_requirements_dir: "{{ playbook_dir }}"
+
+# Terminal workspace (kitty + zellij). Both tasks are opt-in.
+# kitty requires EPEL on EL systems; the role does not manage EPEL.
+devsecops_terminal_packages:
+  - kitty
+
+# Zellij is not packaged for Fedora/EL. It is installed from the official
+# GitHub release binary. Set to "latest" to track the newest release.
+devsecops_zellij_version: "v0.45.1"
+devsecops_zellij_install_dir: "/usr/local/bin"
+
+# kitty configuration. When 'devsecops_kitty_config_src' points to a file on
+# the control node (e.g. "{{ playbook_dir }}/files/kitty/kitty.conf"), that
+# file is deployed verbatim and the variables below are ignored.
+devsecops_kitty_config_dir: "{{ ansible_facts['user_dir'] }}/.config/kitty"
+devsecops_kitty_config_src: ""
+devsecops_kitty_font_family: "monospace"
+devsecops_kitty_font_size: 11.0
+devsecops_kitty_background_opacity: 0.95
+devsecops_kitty_window_padding: 6
+devsecops_kitty_launch_keybind: "ctrl+shift+enter"
+devsecops_kitty_remote_control: true
+devsecops_kitty_listen_on: "unix:@kitty"
+devsecops_kitty_hide_tab_bar: true
+devsecops_kitty_config_extra: ""
+
+# zellij configuration. When 'devsecops_zellij_config_src' points to a file
+# on the control node (e.g. "{{ playbook_dir }}/files/zellij/config.kdl"),
+# that file is deployed verbatim and the variables below are ignored.
+devsecops_zellij_config_dir: "{{ ansible_facts['user_dir'] }}/.config/zellij"
+devsecops_zellij_config_src: ""
+devsecops_zellij_theme: ""
+devsecops_zellij_mouse_mode: true
+devsecops_zellij_pane_frames: true
+devsecops_zellij_scroll_buffer_size: 50000
+devsecops_zellij_copy_command: ""
+devsecops_zellij_config_extra: ""
+
+# Workspace layout. One pane per repository below; paths may start with ~.
+# Repositories whose path does not exist on the target are skipped with a
+# warning. Panes are distributed over 'devsecops_workspace_grid_columns'
+# columns (2 columns x 2 rows for four repos).
+devsecops_workspace_name: "dev"
+devsecops_workspace_layout_name: "oc-workspace"
+devsecops_workspace_launcher_name: "oc-workspace"
+devsecops_workspace_kitty_class: "devsecops-workspace"
+devsecops_workspace_repos: []
+#  - { name: 'ansible-role-ai', path: '~/GIT/AnsibleRoles/ansible-role-ai' }
+devsecops_workspace_open_command: "opencode"
+devsecops_workspace_keep_shell: true
+devsecops_workspace_grid_columns: 2
+devsecops_workspace_desktop_entry: true
+devsecops_workspace_desktop_entry_name: "OpenCode Workspace"
+
+# Attention: mirrors OpenCode session state into zellij pane titles (badges)
+# and raises desktop notifications. Requires OpenCode with an existing
+# '~/.config/opencode' directory (installed by ansible-role-ai).
+devsecops_workspace_attention_enabled: true
+devsecops_workspace_badges:
+  busy: "▶"
+  waiting: "⏳"
+  done: "✅"
+  error: "❌"
+devsecops_workspace_notify_on_idle_when_focused: false
+devsecops_workspace_notify_command: "notify-send"
 ...

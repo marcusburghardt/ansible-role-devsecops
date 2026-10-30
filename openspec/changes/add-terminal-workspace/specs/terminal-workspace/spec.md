@@ -51,8 +51,8 @@ the GitHub API.
 
 #### Scenario: Zellij is not installed
 - **WHEN** the task runs on a host without zellij
-- **THEN** the release tarball is downloaded, checksum-verified, and the
-  binary is installed with mode `0755`
+- **THEN** the release tarball is downloaded, the extracted binary is verified
+  against the published release checksum, and installed with mode `0755`
 
 #### Scenario: Installed version matches the target
 - **WHEN** `zellij --version` already reports the resolved target version
@@ -63,7 +63,7 @@ the GitHub API.
 - **THEN** the binary is replaced with the target version
 
 #### Scenario: Checksum verification fails
-- **WHEN** the downloaded tarball does not match the release checksum
+- **WHEN** the extracted binary does not match the published release checksum
 - **THEN** the installation fails and no binary is replaced
 
 ### Requirement: Kitty configuration deployment

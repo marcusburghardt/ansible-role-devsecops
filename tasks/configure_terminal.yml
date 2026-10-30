@@ -1,0 +1,196 @@
+---
+- name: "{{ role_name }} | {{ task.name }} | Ensure the terminal configuration directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ devsecops_kitty_config_dir }}"
+    - "{{ devsecops_zellij_config_dir }}"
+    - "{{ user_zellij_layouts_dir }}"
+    - "{{ devsecops_scripts_dir }}"
+    - "{{ user_desktop_applications_dir }}"
+  register: result_terminal_directories
+
+- name: "{{ role_name }} | {{ task.name }} | Check the kitty configuration source file"
+  ansible.builtin.stat:
+    path: "{{ devsecops_kitty_config_src }}"
+  delegate_to: localhost
+  become: false
+  register: result_kitty_config_src
+  when: devsecops_kitty_config_src | length > 0
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when the kitty configuration source is missing"
+  ansible.builtin.assert:
+    that:
+      - result_kitty_config_src.stat.exists
+    fail_msg: >-
+      devsecops_kitty_config_src is set to '{{ devsecops_kitty_config_src }}' but the
+      file does not exist on the control node.
+  when: devsecops_kitty_config_src | length > 0
+
+- name: "{{ role_name }} | {{ task.name }} | Check the zellij configuration source file"
+  ansible.builtin.stat:
+    path: "{{ devsecops_zellij_config_src }}"
+  delegate_to: localhost
+  become: false
+  register: result_zellij_config_src
+  when: devsecops_zellij_config_src | length > 0
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when the zellij configuration source is missing"
+  ansible.builtin.assert:
+    that:
+      - result_zellij_config_src.stat.exists
+    fail_msg: >-
+      devsecops_zellij_config_src is set to '{{ devsecops_zellij_config_src }}' but the
+      file does not exist on the control node.
+  when: devsecops_zellij_config_src | length > 0
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the kitty configuration from a playbook file"
+  ansible.builtin.template:
+    src: kitty-from-src.conf.j2
+    dest: "{{ user_kitty_config_file }}"
+    mode: '0644'
+    backup: true
+  when:
+    - result_terminal_directories is success
+    - devsecops_kitty_config_src | length > 0
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the kitty configuration from role variables"
+  ansible.builtin.template:
+    src: kitty.conf.j2
+    dest: "{{ user_kitty_config_file }}"
+    mode: '0644'
+    backup: true
+  when:
+    - result_terminal_directories is success
+    - devsecops_kitty_config_src | length == 0
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the zellij configuration from a playbook file"
+  ansible.builtin.template:
+    src: zellij/config-from-src.kdl.j2
+    dest: "{{ user_zellij_config_file }}"
+    mode: '0644'
+    backup: true
+  when:
+    - result_terminal_directories is success
+    - devsecops_zellij_config_src | length > 0
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the zellij configuration from role variables"
+  ansible.builtin.template:
+    src: zellij/config.kdl.j2
+    dest: "{{ user_zellij_config_file }}"
+    mode: '0644'
+    backup: true
+  when:
+    - result_terminal_directories is success
+    - devsecops_zellij_config_src | length == 0
+
+- name: "{{ role_name }} | {{ task.name }} | Check the existence of the configured repository paths"
+  ansible.builtin.stat:
+    path: "{{ item.path | expanduser }}"
+  loop: "{{ devsecops_workspace_repos }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: result_workspace_repo_paths
+
+- name: "{{ role_name }} | {{ task.name }} | Warn about missing repository paths"
+  ansible.builtin.debug:
+    msg: >-
+      Repository path '{{ item.item.path }}' for pane '{{ item.item.name }}' does not
+      exist on this host; skipping it in the workspace layout.
+  loop: "{{ result_workspace_repo_paths.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  when: not item.stat.exists
+
+- name: "{{ role_name }} | {{ task.name }} | Set the list of existing workspace repositories"
+  ansible.builtin.set_fact:
+    _devsecops_workspace_existing_repos: >-
+      {{ result_workspace_repo_paths.results
+         | selectattr('stat.exists')
+         | map(attribute='item')
+         | list }}
+
+- name: "{{ role_name }} | {{ task.name }} | Warn when no repository path exists"
+  ansible.builtin.debug:
+    msg: >-
+      No configured repository path exists on this host; skipping the workspace
+      layout deployment. Check devsecops_workspace_repos.
+  when: _devsecops_workspace_existing_repos | length == 0
+
+- name: "{{ role_name }} | {{ task.name }} | Render the workspace grid layout"
+  ansible.builtin.template:
+    src: zellij/layouts/oc-workspace.kdl.j2
+    dest: "{{ user_zellij_layout_file }}"
+    mode: '0644'
+    backup: true
+  when:
+    - result_terminal_directories is success
+    - _devsecops_workspace_existing_repos | length > 0
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the workspace launcher"
+  ansible.builtin.template:
+    src: oc-workspace.j2
+    dest: "{{ user_workspace_launcher }}"
+    mode: '0755'
+    backup: true
+  when: result_terminal_directories is success
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the workspace desktop entry"
+  ansible.builtin.template:
+    src: oc-workspace.desktop.j2
+    dest: "{{ user_workspace_desktop_entry }}"
+    mode: '0644'
+    backup: true
+  when:
+    - result_terminal_directories is success
+    - devsecops_workspace_desktop_entry | bool
+
+- name: "{{ role_name }} | {{ task.name }} | Check the existence of the OpenCode configuration directory"
+  ansible.builtin.stat:
+    path: "{{ user_opencode_config_dir }}"
+  register: result_opencode_config_dir
+  when: devsecops_workspace_attention_enabled | bool
+
+- name: "{{ role_name }} | {{ task.name }} | Warn when OpenCode is not installed"
+  ansible.builtin.debug:
+    msg: >-
+      Attention plugin skipped: {{ user_opencode_config_dir }} does not exist.
+      Install OpenCode (ansible-role-ai) to use workspace attention badges.
+  when:
+    - devsecops_workspace_attention_enabled | bool
+    - not result_opencode_config_dir.stat.exists
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure the OpenCode plugins directory"
+  ansible.builtin.file:
+    path: "{{ user_opencode_plugins_dir }}"
+    state: directory
+    mode: '0755'
+  when:
+    - devsecops_workspace_attention_enabled | bool
+    - result_opencode_config_dir.stat.exists
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the zellij attention plugin"
+  ansible.builtin.template:
+    src: opencode/zellij-attention.ts.j2
+    dest: "{{ user_opencode_attention_plugin }}"
+    mode: '0644'
+    backup: true
+  when:
+    - devsecops_workspace_attention_enabled | bool
+    - result_opencode_config_dir.stat.exists
+
+- name: "{{ role_name }} | {{ task.name }} | Validate the deployed zellij configuration"
+  ansible.builtin.command:
+    cmd: zellij --config {{ user_zellij_config_file }} setup --check
+  changed_when: false
+  register: result_zellij_config_check
+
+- name: "{{ role_name }} | {{ task.name }} | Show the workspace entry point"
+  ansible.builtin.debug:
+    msg: >-
+      Workspace ready. Start it with '{{ user_workspace_launcher }}' (session
+      '{{ devsecops_workspace_name }}', layout '{{ devsecops_workspace_layout_name }}').
+      New zellij sessions pick up configuration changes; restart the session if
+      it was already running.
