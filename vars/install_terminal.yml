@@ -1,0 +1,4 @@
+---
+# This file has variables specific for the install_terminal tasks.
+devsecops_zellij_download_base: "https://github.com/zellij-org/zellij/releases/download"
+devsecops_zellij_latest_release_url: "https://api.github.com/repos/zellij-org/zellij/releases/latest"

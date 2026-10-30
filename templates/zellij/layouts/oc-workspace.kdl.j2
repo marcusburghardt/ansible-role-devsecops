@@ -1,0 +1,38 @@
+{%- set repo_count = _devsecops_workspace_existing_repos | length -%}
+{%- set batch_size = ((repo_count / devsecops_workspace_grid_columns) | round(0, 'ceil')) | int -%}
+{%- set batch_size = 1 if batch_size < 1 else batch_size -%}
+{%- set columns = _devsecops_workspace_existing_repos | batch(batch_size) -%}
+{%- set ns = namespace(first_pane=true) -%}
+// {{ ansible_managed }}
+// One pane per repository, generated from devsecops_workspace_repos.
+// Panes are distributed over {{ devsecops_workspace_grid_columns }} column(s).
+
+layout {
+    default_tab_template {
+        children
+        pane size=1 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="{{ devsecops_workspace_name }}" focus=true {
+        pane split_direction="vertical" {
+{% for column in columns %}
+            pane split_direction="horizontal" {
+{% for repo in column %}
+{% if devsecops_workspace_keep_shell %}
+                pane name="{{ repo.name }}" command="bash"{% if ns.first_pane %} focus=true{% set ns.first_pane = false %}{% endif %} {
+                    args "-lc" "{{ devsecops_workspace_open_command }}; exec bash"
+                    cwd "{{ repo.path | expanduser }}"
+                }
+{% else %}
+                pane name="{{ repo.name }}" command="{{ devsecops_workspace_open_command }}"{% if ns.first_pane %} focus=true{% set ns.first_pane = false %}{% endif %} {
+                    cwd "{{ repo.path | expanduser }}"
+                }
+{% endif %}
+{% endfor %}
+            }
+{% endfor %}
+        }
+    }
+}

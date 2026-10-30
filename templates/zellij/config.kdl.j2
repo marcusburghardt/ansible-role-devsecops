@@ -1,0 +1,17 @@
+// {{ ansible_managed }}
+// Generic zellij configuration. Override with devsecops_zellij_config_src
+// to deploy a full configuration file from the playbook instead.
+
+{% if devsecops_zellij_theme | length > 0 %}
+theme "{{ devsecops_zellij_theme }}"
+{% endif %}
+mouse_mode {{ 'true' if devsecops_zellij_mouse_mode else 'false' }}
+pane_frames {{ 'true' if devsecops_zellij_pane_frames else 'false' }}
+scroll_buffer_size {{ devsecops_zellij_scroll_buffer_size }}
+show_startup_tips false
+{% if devsecops_zellij_copy_command | length > 0 %}
+copy_command "{{ devsecops_zellij_copy_command }}"
+{% endif %}
+{% if devsecops_zellij_config_extra | length > 0 %}
+{{ devsecops_zellij_config_extra }}
+{% endif %}

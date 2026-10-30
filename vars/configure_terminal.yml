@@ -1,0 +1,12 @@
+---
+# This file has variables specific for the configure_terminal tasks.
+user_kitty_config_file: "{{ devsecops_kitty_config_dir }}/kitty.conf"
+user_zellij_config_file: "{{ devsecops_zellij_config_dir }}/config.kdl"
+user_zellij_layouts_dir: "{{ devsecops_zellij_config_dir }}/layouts"
+user_zellij_layout_file: "{{ user_zellij_layouts_dir }}/{{ devsecops_workspace_layout_name }}.kdl"
+user_desktop_applications_dir: "{{ ansible_facts['user_dir'] }}/.local/share/applications"
+user_workspace_launcher: "{{ devsecops_scripts_dir }}/{{ devsecops_workspace_launcher_name }}"
+user_workspace_desktop_entry: "{{ user_desktop_applications_dir }}/{{ devsecops_workspace_launcher_name }}.desktop"
+user_opencode_config_dir: "{{ ansible_facts['user_dir'] }}/.config/opencode"
+user_opencode_plugins_dir: "{{ user_opencode_config_dir }}/plugins"
+user_opencode_attention_plugin: "{{ user_opencode_plugins_dir }}/zellij-attention.ts"
