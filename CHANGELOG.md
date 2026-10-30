@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/marcusburghardt/ansible-role-devsecops/compare/v0.3.0...v0.3.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* repair workspace launcher, attention plugin and kitty tab bar ([803135d](https://github.com/marcusburghardt/ansible-role-devsecops/commit/803135d5cf95415c628fd1c6801565b99dfeda56))
+
 ## [0.3.0](https://github.com/marcusburghardt/ansible-role-devsecops/compare/v0.2.0...v0.3.0) (2026-10-30)
 
 
