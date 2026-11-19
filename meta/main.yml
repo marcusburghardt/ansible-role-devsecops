@@ -16,4 +16,6 @@ galaxy_info:
     - devsecops
     - sysadmin
     - security
+collections:
+  - community.general
 dependencies: []

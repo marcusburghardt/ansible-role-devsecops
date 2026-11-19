@@ -1,0 +1,7 @@
+---
+# This file has variables specific for the configure_privacy tasks.
+
+devsecops_privacy_ignored_directories_key: '/org/freedesktop/tracker/miner/files/ignored-directories'
+devsecops_privacy_session_bus: "/run/user/{{ ansible_facts['user_uid'] }}/bus"
+devsecops_privacy_runtime_dir: "/run/user/{{ ansible_facts['user_uid'] }}"
+...

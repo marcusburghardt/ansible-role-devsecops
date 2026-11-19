@@ -40,6 +40,8 @@ Requirements
 - For monitored file access: a kernel with auditing enabled (do not boot with
   `audit=0`) and auditd (the role installs `audit`, `python3-audit`, and
   `libnotify`).
+- For desktop privacy: a GNOME session and the `community.general` Ansible
+  collection.
 
 > **Platform support:** This role currently supports Red Hat Enterprise Linux (EL)
 > and Fedora only. There are no Debian/Ubuntu variables defined.
@@ -93,6 +95,7 @@ Role Variables
 | `devsecops_monitor_manage_auditd_conf` | Manage retention keys in `auditd.conf` | `true` |
 | `devsecops_monitor_enable_syscall_auditing` | Disable the stock `-a task,never` rule so syscall auditing works | `false` |
 | `devsecops_monitor_backlog_limit` | Kernel audit queue limit (`-b`), `0` to leave unmanaged | `8192` |
+| `devsecops_privacy_ignored_directories` | Directories excluded from the LocalSearch index | `po`, `CVS`, `core-dumps`, `lost+found`, `.ssh` |
 
 ### Task Selection
 
@@ -111,6 +114,7 @@ devsecops_tasks:
   - { enabled: false, name: 'install_terminal' }
   - { enabled: false, name: 'configure_terminal' }
   - { enabled: false, name: 'monitor_paths' }
+  - { enabled: false, name: 'configure_privacy' }
 ```
 
 | Task | Purpose |
@@ -125,6 +129,7 @@ devsecops_tasks:
 | `install_terminal` | Install kitty (package) and zellij (GitHub release binary) |
 | `configure_terminal` | Deploy kitty/zellij configs, the grid layout, launcher, desktop entry, and attention plugin |
 | `monitor_paths` | Generate auditd rules and deploy the access watcher for sensitive paths |
+| `configure_privacy` | Exclude sensitive directories from the GNOME LocalSearch index |
 
 Set `enabled: false` on any task to skip it.
 
@@ -227,6 +232,31 @@ oc-workspace            # reattach later, panes and state intact
 
 New zellij sessions pick up configuration changes; restart a running session
 (`zellij kill-session dev`) after changing the layout or config.
+
+Desktop Privacy
+---------------
+
+The opt-in `configure_privacy` task excludes sensitive directories from the
+GNOME LocalSearch index. It requires a desktop session and the
+`community.general` collection, and runs as the desktop user. The defaults
+cover common indexer exclusions plus `.ssh`; add site-specific directories in
+your playbook:
+
+```yaml
+devsecops_tasks:
+  - { enabled: true, name: 'configure_privacy' }
+
+devsecops_privacy_ignored_directories:
+  - po
+  - CVS
+  - core-dumps
+  - lost+found
+  - .ssh
+  - .secrets   # site-specific example
+```
+
+The task skips with a warning when no desktop session bus is available.
+Previously indexed content is not removed automatically.
 
 Monitored File Access
 ---------------------

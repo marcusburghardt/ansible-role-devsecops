@@ -11,6 +11,7 @@ devsecops_tasks:
   - { enabled: false, name: 'install_terminal' }
   - { enabled: false, name: 'configure_terminal' }
   - { enabled: false, name: 'monitor_paths' }
+  - { enabled: false, name: 'configure_privacy' }
 
 # Everything created by this role will be limited to this directory scope, except for
 # users and OS specific settings.
@@ -153,4 +154,13 @@ devsecops_monitor_enable_syscall_auditing: false
 # syscall auditing is active. Set to 0 to leave it unmanaged.
 devsecops_monitor_backlog_limit: 8192
 
+# Desktop privacy (configure_privacy). Directories excluded from the GNOME
+# LocalSearch index. Site-specific directories belong in the consuming
+# playbook, not in these defaults.
+devsecops_privacy_ignored_directories:
+  - po
+  - CVS
+  - core-dumps
+  - lost+found
+  - .ssh
 ...

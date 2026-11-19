@@ -1,0 +1,24 @@
+---
+- name: "{{ role_name }} | {{ task.name }} | Check for a desktop session bus"
+  ansible.builtin.stat:
+    path: "{{ devsecops_privacy_session_bus }}"
+  register: result_privacy_session_bus
+
+- name: "{{ role_name }} | {{ task.name }} | Warn when no desktop session is available"
+  ansible.builtin.debug:
+    msg: >-
+      No desktop session bus found at {{ devsecops_privacy_session_bus }};
+      skipping the LocalSearch index exclusions.
+  when: not result_privacy_session_bus.stat.exists
+
+- name: "{{ role_name }} | {{ task.name }} | Exclude sensitive directories from LocalSearch"
+  become: false
+  community.general.dconf:
+    key: "{{ devsecops_privacy_ignored_directories_key }}"
+    value: "{{ devsecops_privacy_ignored_directories | to_json }}"
+    state: present
+  environment:
+    DBUS_SESSION_BUS_ADDRESS: "unix:path={{ devsecops_privacy_session_bus }}"
+    XDG_RUNTIME_DIR: "{{ devsecops_privacy_runtime_dir }}"
+  when: result_privacy_session_bus.stat.exists
+...
