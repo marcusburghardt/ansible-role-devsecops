@@ -10,6 +10,8 @@ devsecops_tasks:
   - { enabled: false, name: 'manage_galaxy_roles' }
   - { enabled: false, name: 'install_terminal' }
   - { enabled: false, name: 'configure_terminal' }
+  - { enabled: false, name: 'monitor_paths' }
+  - { enabled: false, name: 'configure_privacy' }
 
 # Everything created by this role will be limited to this directory scope, except for
 # users and OS specific settings.
@@ -118,4 +120,47 @@ devsecops_workspace_badges:
   error: "❌"
 devsecops_workspace_notify_on_idle_when_focused: false
 devsecops_workspace_notify_command: "notify-send"
+
+# Monitored file access (auditd). Opt-in via the 'monitor_paths' task.
+# Each entry supports 'enabled', 'path', 'access' (r, w, x, a) and an optional
+# 'key'. The audit key is always '<devsecops_monitor_key_prefix>_<key>', and
+# defaults to a sanitized form of the path when no key is given.
+devsecops_monitored_paths: []
+#  - { enabled: true, path: '/srv/secrets', access: 'rwa', key: 'secrets' }
+#  - { enabled: true, path: '/etc/shadow', access: 'rwa', key: 'shadow' }
+
+devsecops_monitor_log_file: '/var/log/devsecops/monitored-access.log'
+devsecops_monitor_log_retention_days: 30
+devsecops_monitor_notify_desktop: true
+devsecops_monitor_notify_user: >-
+  {{ (ansible_facts['env'] | default({})).get('SUDO_USER')
+     or ansible_facts['user_id'] }}
+devsecops_monitor_notify_access: 'rwa'
+devsecops_monitor_notify_denied: true
+devsecops_monitor_notify_throttle: 30
+devsecops_monitor_notify_command: ''
+devsecops_monitor_audit_log_file: '/var/log/audit/audit.log'
+devsecops_monitor_rules_file: '/etc/audit/rules.d/50-devsecops-monitor.rules'
+devsecops_monitor_key_prefix: 'devsecops'
+devsecops_monitor_manage_auditd_conf: true
+
+# Fedora and EL ship /etc/audit/rules.d/audit.rules with '-a task,never',
+# which disables syscall auditing for every task. The monitored-path rules
+# cannot fire until that rule is removed. The role detects it and fails by
+# default; set this to true to have the role comment it out.
+devsecops_monitor_enable_syscall_auditing: false
+
+# Kernel audit queue limit. 64 is the stock default and too small once
+# syscall auditing is active. Set to 0 to leave it unmanaged.
+devsecops_monitor_backlog_limit: 8192
+
+# Desktop privacy (configure_privacy). Directories excluded from the GNOME
+# LocalSearch index. Site-specific directories belong in the consuming
+# playbook, not in these defaults.
+devsecops_privacy_ignored_directories:
+  - po
+  - CVS
+  - core-dumps
+  - lost+found
+  - .ssh
 ...

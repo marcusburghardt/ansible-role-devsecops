@@ -1,2 +1,22 @@
 ---
 # handlers file for ansible-role-devsecops
+
+- name: Reload the devsecops audit rules
+  become: true
+  ansible.builtin.command:
+    cmd: augenrules --load
+  changed_when: true
+
+- name: Reload the devsecops auditd configuration
+  become: true
+  ansible.builtin.command:
+    cmd: auditctl --signal reload
+  changed_when: true
+
+- name: Restart the devsecops audit watcher
+  become: true
+  ansible.builtin.systemd:
+    name: devsecops-audit-watch
+    state: restarted
+    daemon_reload: true
+...

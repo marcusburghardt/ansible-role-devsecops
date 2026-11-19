@@ -1,0 +1,68 @@
+---
+# This file has variables specific for the monitor_paths tasks.
+
+# Packages required for kernel auditing and desktop notifications.
+devsecops_monitor_packages:
+  - audit
+  - python3-audit
+  - libnotify
+
+# Audit architectures to cover. 64-bit hosts with a 32-bit compat layer need
+# rules for both, otherwise 32-bit applications bypass the watch.
+devsecops_monitor_audit_arches: >-
+  {{ {'x86_64': ['b64', 'b32'],
+      'amd64': ['b64', 'b32'],
+      'i386': ['b32'],
+      'i686': ['b32'],
+      'aarch64': ['b64'],
+      'arm64': ['b64'],
+      'ppc64le': ['b64'],
+      's390x': ['b64']}.get(ansible_facts['architecture'] | lower, ['b64']) }}
+
+# Syscalls that can fail on a monitored path. Used for the explicit
+# success=0 rules, because perm= alone is not a reliable contract for failures.
+devsecops_monitor_denied_syscalls:
+  - open
+  - openat
+  - openat2
+  - creat
+  - truncate
+  - ftruncate
+  - chmod
+  - fchmod
+  - fchmodat
+  - chown
+  - fchown
+  - lchown
+  - fchownat
+  - rename
+  - renameat
+  - renameat2
+  - unlink
+  - unlinkat
+
+# auditd retention settings managed with lineinfile. Only these keys are
+# touched so distro defaults and future package updates stay intact.
+devsecops_monitor_auditd_conf: '/etc/audit/auditd.conf'
+devsecops_monitor_auditd_settings:
+  max_log_file: 50
+  num_logs: 10
+  max_log_file_action: ROTATE
+  space_left_action: SYSLOG
+  admin_space_left_action: SYSLOG
+  disk_full_action: SYSLOG
+  disk_error_action: SYSLOG
+  log_format: ENRICHED
+  flush: INCREMENTAL
+  freq: 20
+
+# Managed file locations.
+devsecops_monitor_config_dir: '/etc/devsecops'
+devsecops_monitor_log_dir: "{{ devsecops_monitor_log_file | dirname }}"
+devsecops_monitor_rules_dir: "{{ devsecops_monitor_rules_file | dirname }}"
+devsecops_monitor_config_file: '/etc/devsecops/audit-monitor.json'
+devsecops_monitor_script: '/usr/local/sbin/devsecops-audit-watch'
+devsecops_monitor_service_name: 'devsecops-audit-watch'
+devsecops_monitor_service_file: '/etc/systemd/system/devsecops-audit-watch.service'
+devsecops_monitor_logrotate_file: '/etc/logrotate.d/devsecops-monitor'
+...

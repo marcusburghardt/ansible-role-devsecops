@@ -19,6 +19,10 @@ This role will:
   multi-repository OpenCode grid layout, an attach-or-create launcher, and
   OpenCode session badges with desktop notifications (see
   [Terminal Workspace](#terminal-workspace)).
+- Optionally audit access to sensitive files and directory trees with auditd,
+  keep a curated JSONL access log, and raise desktop notifications for
+  successful and denied access (see
+  [Monitored File Access](#monitored-file-access)).
 
 To install this role:
 ```
@@ -33,6 +37,11 @@ Requirements
   role does not manage EPEL), and OpenCode with `~/.config/opencode` present
   if you enable the attention plugin (see
   [ansible-role-ai](https://github.com/marcusburghardt/ansible-role-ai)).
+- For monitored file access: a kernel with auditing enabled (do not boot with
+  `audit=0`) and auditd (the role installs `audit`, `python3-audit`, and
+  `libnotify`).
+- For desktop privacy: a GNOME session and the `community.general` Ansible
+  collection.
 
 > **Platform support:** This role currently supports Red Hat Enterprise Linux (EL)
 > and Fedora only. There are no Debian/Ubuntu variables defined.
@@ -75,6 +84,18 @@ Role Variables
 | `devsecops_workspace_attention_enabled` | Deploy the OpenCode attention plugin | `true` |
 | `devsecops_workspace_badges` | Badge glyphs for busy/waiting/done/error | `▶ ⏳ ✅ ❌` |
 | `devsecops_workspace_notify_command` | Notification command used by the plugin | `notify-send` |
+| `devsecops_monitored_paths` | Files and directories audited by `monitor_paths` | Empty |
+| `devsecops_monitor_notify_user` | Desktop user receiving access notifications | `$SUDO_USER` or the current user |
+| `devsecops_monitor_notify_access` | Access types that raise desktop notifications | `rwa` |
+| `devsecops_monitor_notify_denied` | Always notify denied attempts | `true` |
+| `devsecops_monitor_notify_throttle` | Notifications per path and result per minute | `30` |
+| `devsecops_monitor_notify_command` | Notification command (empty uses `notify-send`) | Empty |
+| `devsecops_monitor_log_file` | Curated JSONL access log | `/var/log/devsecops/monitored-access.log` |
+| `devsecops_monitor_log_retention_days` | Daily rotation retention for the curated log | `30` |
+| `devsecops_monitor_manage_auditd_conf` | Manage retention keys in `auditd.conf` | `true` |
+| `devsecops_monitor_enable_syscall_auditing` | Disable the stock `-a task,never` rule so syscall auditing works | `false` |
+| `devsecops_monitor_backlog_limit` | Kernel audit queue limit (`-b`), `0` to leave unmanaged | `8192` |
+| `devsecops_privacy_ignored_directories` | Directories excluded from the LocalSearch index | `po`, `CVS`, `core-dumps`, `lost+found`, `.ssh` |
 
 ### Task Selection
 
@@ -92,6 +113,8 @@ devsecops_tasks:
   - { enabled: false, name: 'manage_galaxy_roles' }
   - { enabled: false, name: 'install_terminal' }
   - { enabled: false, name: 'configure_terminal' }
+  - { enabled: false, name: 'monitor_paths' }
+  - { enabled: false, name: 'configure_privacy' }
 ```
 
 | Task | Purpose |
@@ -105,6 +128,8 @@ devsecops_tasks:
 | `manage_galaxy_roles` | Render `requirements.yml` and keep Galaxy roles updated |
 | `install_terminal` | Install kitty (package) and zellij (GitHub release binary) |
 | `configure_terminal` | Deploy kitty/zellij configs, the grid layout, launcher, desktop entry, and attention plugin |
+| `monitor_paths` | Generate auditd rules and deploy the access watcher for sensitive paths |
+| `configure_privacy` | Exclude sensitive directories from the GNOME LocalSearch index |
 
 Set `enabled: false` on any task to skip it.
 
@@ -207,6 +232,165 @@ oc-workspace            # reattach later, panes and state intact
 
 New zellij sessions pick up configuration changes; restart a running session
 (`zellij kill-session dev`) after changing the layout or config.
+
+Desktop Privacy
+---------------
+
+The opt-in `configure_privacy` task excludes sensitive directories from the
+GNOME LocalSearch index. It requires a desktop session and the
+`community.general` collection, and runs as the desktop user. The defaults
+cover common indexer exclusions plus `.ssh`; add site-specific directories in
+your playbook:
+
+```yaml
+devsecops_tasks:
+  - { enabled: true, name: 'configure_privacy' }
+
+devsecops_privacy_ignored_directories:
+  - po
+  - CVS
+  - core-dumps
+  - lost+found
+  - .ssh
+  - .secrets   # site-specific example
+```
+
+The task skips with a warning when no desktop session bus is available.
+Previously indexed content is not removed automatically.
+
+Monitored File Access
+---------------------
+
+The opt-in `monitor_paths` task watches sensitive files and directory trees at
+the kernel level with auditd. It captures successful and denied access with the
+process identity, writes a curated JSONL log, and raises native desktop
+notifications. Enable it in your playbook:
+
+```yaml
+devsecops_tasks:
+  # ...
+  - { enabled: true, name: 'monitor_paths' }
+
+devsecops_monitored_paths:
+  - { enabled: true, path: '/srv/secrets', access: 'rwa', key: 'secrets' }
+  - { enabled: true, path: '/etc/shadow',  access: 'rwa', key: 'shadow' }
+
+# Fedora and EL disable syscall auditing by default with
+# '-a task,never'; allow the role to comment that rule out.
+devsecops_monitor_enable_syscall_auditing: true
+```
+
+The `access` mask is any combination of `r`, `w`, `x`, and `a`
+(attribute/metadata). Directories are watched recursively, including files
+created later; mount points below a watched directory are not followed, so add
+a separate entry per filesystem. The optional `key` defaults to a sanitized
+form of the path; the audit key is always prefixed with `devsecops_`. A missing
+or invalid path fails the play before any audit rule is written.
+
+On kernels that lack one of the syscalls listed for denied-access capture (for
+example `openat2` before kernel 5.6), override
+`devsecops_monitor_denied_syscalls` with the subset supported by the host.
+
+Monitoring requires syscall auditing. Fedora and EL ship
+`/etc/audit/rules.d/audit.rules` with `-a task,never`, which disables it for
+every task, so the generated rules would never fire. The role detects that
+rule and fails by default instead of silently changing the audit baseline. Set
+`devsecops_monitor_enable_syscall_auditing: true` to have the role comment the
+rule out (with a backup), reload the rules, and verify it is gone. Processes
+that were already running keep their disabled state until they restart. The
+role also sets the kernel audit queue limit to
+`devsecops_monitor_backlog_limit` (default 8192); the stock value of 64 is too
+small once syscall auditing is active. Set it to `0` to leave it unmanaged.
+
+The role deploys these files:
+
+| Path | Purpose |
+|------|---------|
+| `/etc/audit/rules.d/50-devsecops-monitor.rules` | Rendered audit rules |
+| `/etc/devsecops/audit-monitor.json` | Watcher configuration |
+| `/usr/local/sbin/devsecops-audit-watch` | Watcher script (root-owned) |
+| `/etc/systemd/system/devsecops-audit-watch.service` | Watcher service |
+| `/etc/logrotate.d/devsecops-monitor` | Curated log rotation |
+| `/var/log/devsecops/monitored-access.log` | Curated JSONL access log |
+
+The curated log is created during deployment with `0600 root:root` permissions
+and stays empty until the first monitored access. Read it with
+`sudo tail -F /var/log/devsecops/monitored-access.log`. The watcher script is
+deployed to `/usr/local/sbin` on purpose: the service runs as root, and a
+root-run executable must not live in a user-writable directory such as `~/bin`.
+
+Do not edit the deployed watcher configuration directly: the role renders
+`/etc/devsecops/audit-monitor.json` from the `devsecops_monitor_*` variables.
+It contains `audit_log_file`, `log_file`, `key_prefix`, `paths`,
+`notify_desktop`, `notify_user`, `notify_access`, `notify_denied`,
+`notify_throttle`, and `notify_command`. Each JSONL record contains `ts`,
+`path`, `access` (`read`, `write`, `metadata`, or `list`), `result`
+(`success`, `denied`, or `failed`), `errno`, `syscall`, `pid`, `ppid`, `comm`,
+`exe`, `uid`, `auid`, `tty`, `session`, and `key`. Listing operations (stat,
+readdir, readlink, extended-attribute enumeration, and directory or `O_PATH`
+opens) are recorded with access type `list` but never raise notifications.
+
+The `devsecops-audit-watch` service runs as root, starts after `auditd`,
+restarts automatically on failure, and follows audit log rotation. A watcher
+failure does not stop kernel auditing; the raw audit log stays authoritative.
+Its configuration is deployed to the path above and can also be inspected with
+`systemctl cat devsecops-audit-watch`.
+
+The role manages a small set of workstation-safe retention keys in
+`/etc/audit/auditd.conf` (`max_log_file`, `num_logs`, `max_log_file_action`,
+`space_left_action`, `admin_space_left_action`, `disk_full_action`,
+`disk_error_action`, `log_format`, `flush`, and `freq`) so a full disk never
+halts the system or suspends auditing. Set
+`devsecops_monitor_manage_auditd_conf: false` to leave that file untouched.
+auditd has no drop-in directory for these settings; its `-c` option relocates
+the whole configuration directory instead of merging individual keys, so the
+role deliberately edits only the keys above and leaves the rest of
+`auditd.conf` to the distribution. Rules reload with `augenrules --load` and
+configuration with `auditctl --signal reload`; auditd is never restarted. After
+loading, the role verifies that every configured path appears in
+`auditctl -l`; if a path is missing it reloads the rules once and fails with
+the loaded rule set when the path still does not appear.
+
+Notifications are sent through the desktop user's session bus with
+`notify-send`, while every alert is also written to journald with the
+`devsecops-audit` identifier. Notifications identify the OS user, the audit
+login user when different, the process and its parent, the executable, and the
+tty/session when available; denied alerts use a warning icon and critical
+urgency. Denied attempts always notify; successful content reads, writes, and
+metadata changes notify when they match `devsecops_monitor_notify_access`.
+Listing events are logged but never notify. Set that variable to `wa` to keep
+content reads in the log without desktop popups. When no graphical session
+exists the alerts remain visible in the journal, and a per-path/result throttle
+(default 30 per minute) suppresses bursts and reports the number of suppressed
+events in the next notification.
+
+Verify a deployment:
+
+```
+auditctl -l | grep devsecops
+systemctl status devsecops-audit-watch
+journalctl -t devsecops-audit -f
+cat /srv/secrets/example.key
+sudo -u nobody cat /etc/shadow
+sudo tail -F /var/log/devsecops/monitored-access.log
+```
+
+To roll back, disable the task and remove the managed rules without disturbing
+auditd:
+
+```
+sudo rm /etc/audit/rules.d/50-devsecops-monitor.rules
+sudo augenrules --load
+sudo systemctl disable --now devsecops-audit-watch
+```
+
+Keeping the task enabled with an empty `devsecops_monitored_paths` also clears
+all rules while leaving the watcher running. The curated log rotation is
+managed by logrotate, so remove `/etc/logrotate.d/devsecops-monitor` and the
+log directory only if you no longer need the recorded evidence. If the role
+commented out `-a task,never`, restore the stock audit baseline by restoring
+the `.bak` file or uncommenting the rule in
+`/etc/audit/rules.d/audit.rules`, then run `sudo augenrules --load`.
 
 Commit Standards
 ----------------

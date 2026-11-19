@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+# Sample audit log used by the '--once' self-test of files/scripts/audit_watch.py.
+# It contains successful, denied, write and metadata events for role-managed
+# keys, listing events that must not notify, plus one event with a foreign key
+# that must be filtered out.
+type=SYSCALL msg=audit(1700000000.100:1000): arch=c000003e syscall=257 success=yes exit=3 a0=ffffff9c a1=7ffd a2=0 a3=0 items=1 ppid=1 pid=200 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=2 comm="cat" exe="/usr/bin/cat" key="devsecops_etc_shadow"
+type=CWD msg=audit(1700000000.100:1000): cwd="/home/alice"
+type=PATH msg=audit(1700000000.100:1000): item=0 name="/etc/shadow" inode=1000 dev=00:1d mode=0100640 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=SYSCALL msg=audit(1700000010.200:1001): arch=c000003e syscall=257 success=no exit=-13 a0=ffffff9c a1=7ffd a2=0 a3=0 items=1 ppid=1 pid=201 auid=65534 uid=65534 gid=65534 euid=65534 suid=65534 fsuid=65534 egid=65534 sgid=65534 fsgid=65534 tty=pts0 ses=3 comm="cat" exe="/usr/bin/cat" key="devsecops_etc_shadow"
+type=CWD msg=audit(1700000010.200:1001): cwd="/tmp"
+type=PATH msg=audit(1700000010.200:1001): item=0 name="/etc/shadow" inode=1000 dev=00:1d mode=0100640 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=SYSCALL msg=audit(1700000020.300:1002): arch=c000003e syscall=257 success=yes exit=4 a0=ffffff9c a1=7ffd a2=241 a3=1b6 items=2 ppid=1 pid=202 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=2 comm="vim" exe="/usr/bin/vim" key="devsecops_srv_secrets"
+type=CWD msg=audit(1700000020.300:1002): cwd="/home/alice"
+type=PATH msg=audit(1700000020.300:1002): item=0 name="/srv/secrets/" inode=2000 dev=00:1e mode=040700 ouid=0 ogid=0 rdev=00:00 nametype=PARENT cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=PATH msg=audit(1700000020.300:1002): item=1 name="/srv/secrets/key.pem" inode=2001 dev=00:1e mode=0100600 ouid=0 ogid=0 rdev=00:00 nametype=CREATE cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=SYSCALL msg=audit(1700000030.400:1003): arch=c000003e syscall=90 success=yes exit=0 a0=7ffd a1=1a4 a2=0 a3=0 items=1 ppid=1 pid=203 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=2 comm="chmod" exe="/usr/bin/chmod" key="devsecops_srv_secrets"
+type=CWD msg=audit(1700000030.400:1003): cwd="/srv/secrets"
+type=PATH msg=audit(1700000030.400:1003): item=0 name="key.pem" inode=2001 dev=00:1e mode=0100600 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=SYSCALL msg=audit(1700000040.500:1004): arch=c000003e syscall=257 success=yes exit=5 a0=ffffff9c a1=7ffd a2=0 a3=0 items=1 ppid=1 pid=204 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=2 comm="cat" exe="/usr/bin/cat" key="other_monitor"
+type=CWD msg=audit(1700000040.500:1004): cwd="/var/log"
+type=PATH msg=audit(1700000040.500:1004): item=0 name="/var/log/messages" inode=3000 dev=00:1d mode=0100644 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=SYSCALL msg=audit(1700000050.600:1005): arch=c000003e syscall=262 success=yes exit=0 a0=ffffff9c a1=7ffd a2=7ffd a3=100 items=1 ppid=1 pid=205 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=2 comm="ls" exe="/usr/bin/ls" key="devsecops_srv_secrets"
+type=CWD msg=audit(1700000050.600:1005): cwd="/srv/secrets"
+type=PATH msg=audit(1700000050.600:1005): item=0 name="key.pem" inode=2001 dev=00:1e mode=0100600 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=SYSCALL msg=audit(1700000060.700:1006): arch=c000003e syscall=257 success=yes exit=3 a0=ffffff9c a1=7ffd a2=10000 a3=0 items=1 ppid=1 pid=206 auid=1000 uid=1000 gid=1000 euid=1000 suid=1000 fsuid=1000 egid=1000 sgid=1000 fsgid=1000 tty=pts0 ses=2 comm="ls" exe="/usr/bin/ls" key="devsecops_srv_secrets"
+type=CWD msg=audit(1700000060.700:1006): cwd="/srv"
+type=PATH msg=audit(1700000060.700:1006): item=0 name="/srv/secrets/" inode=2000 dev=00:1e mode=040700 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0

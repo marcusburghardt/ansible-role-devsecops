@@ -1,0 +1,12 @@
+{{ {
+  'audit_log_file': devsecops_monitor_audit_log_file,
+  'log_file': devsecops_monitor_log_file,
+  'key_prefix': devsecops_monitor_key_prefix,
+  'paths': _devsecops_monitor_validated_paths | default([]) | items2dict(key_name='key', value_name='path'),
+  'notify_desktop': devsecops_monitor_notify_desktop | bool,
+  'notify_user': devsecops_monitor_notify_user,
+  'notify_access': devsecops_monitor_notify_access,
+  'notify_denied': devsecops_monitor_notify_denied | bool,
+  'notify_throttle': devsecops_monitor_notify_throttle | int,
+  'notify_command': devsecops_monitor_notify_command
+} | to_json(indent=2) }}
