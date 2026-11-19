@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+{{ devsecops_monitor_log_file }} {
+    daily
+    rotate {{ devsecops_monitor_log_retention_days }}
+    missingok
+    notifempty
+    nocopytruncate
+    create 0600 root root
+    su root root
+}

@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+[Unit]
+Description=DevSecOps audit watcher for monitored paths
+Documentation=man:auditd(8)
+After=auditd.service
+Wants=auditd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 {{ devsecops_monitor_script }} --config {{ devsecops_monitor_config_file }}
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+User=root
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,412 @@
+---
+- name: "{{ role_name }} | {{ task.name }} | Select the enabled monitored paths"
+  ansible.builtin.set_fact:
+    _devsecops_monitor_enabled_paths: >-
+      {{ devsecops_monitored_paths
+         | selectattr('enabled', 'defined')
+         | selectattr('enabled')
+         | list }}
+
+- name: "{{ role_name }} | {{ task.name }} | Validate the monitored path entries"
+  ansible.builtin.assert:
+    that:
+      - item.path | default('') | length > 0
+      - (item.path | default('')) is match('^/')
+      - (item.access | default('rwa')) is match('^[rwxa]+$')
+    fail_msg: >-
+      Invalid devsecops_monitored_paths entry {{ item }}: 'path' must be an
+      absolute path and 'access' must be a combination of r, w, x and a.
+    quiet: true
+  loop: "{{ _devsecops_monitor_enabled_paths }}"
+  loop_control:
+    label: "{{ item.path | default('<undefined>') }}"
+
+- name: "{{ role_name }} | {{ task.name }} | Check the monitored paths"
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop: "{{ _devsecops_monitor_enabled_paths }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: result_monitor_path_stats
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when a monitored path is missing"
+  ansible.builtin.fail:
+    msg: >-
+      Monitored path '{{ item.item.path }}' does not exist on this host.
+      Create it first or remove the entry from devsecops_monitored_paths.
+  loop: "{{ result_monitor_path_stats.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+  when: not item.stat.exists
+
+- name: "{{ role_name }} | {{ task.name }} | Reset the validated monitored path facts"
+  ansible.builtin.set_fact:
+    _devsecops_monitor_validated_paths: []
+
+- name: "{{ role_name }} | {{ task.name }} | Derive the validated monitored path facts"
+  ansible.builtin.set_fact:
+    _devsecops_monitor_validated_paths: >-
+      {{ (_devsecops_monitor_validated_paths | default([])) + [{
+           'path': item.item.path,
+           'access': item.item.access | default('rwa'),
+           'isdir': item.stat.isdir,
+           'key': (devsecops_monitor_key_prefix ~ '_'
+                   ~ ((item.item.key | default('')
+                       | regex_replace('[^A-Za-z0-9]+', '_')
+                       | regex_replace('_+$', ''))
+                      or (item.item.path
+                          | regex_replace('^/+', '')
+                          | regex_replace('[^A-Za-z0-9]+', '_')
+                          | regex_replace('_+$', ''))))[:31]
+         }] }}
+  loop: "{{ result_monitor_path_stats.results }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure the audit configuration directory"
+  become: true
+  ansible.builtin.file:
+    path: "{{ devsecops_monitor_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure the curated log directory"
+  become: true
+  ansible.builtin.file:
+    path: "{{ devsecops_monitor_log_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0750'
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure the curated access log exists"
+  become: true
+  ansible.builtin.file:
+    path: "{{ devsecops_monitor_log_file }}"
+    state: touch
+    owner: root
+    group: root
+    mode: '0600'
+    modification_time: preserve
+    access_time: preserve
+
+- name: "{{ role_name }} | {{ task.name }} | Read the auditd unit state"
+  become: true
+  ansible.builtin.command:
+    cmd: systemctl is-enabled auditd
+  register: result_auditd_unit_state
+  changed_when: false
+  failed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when auditd is masked"
+  ansible.builtin.fail:
+    msg: >-
+      The auditd unit is masked on this host, so kernel auditing cannot be
+      enabled. Run 'systemctl unmask auditd' and re-run the playbook.
+  when: result_auditd_unit_state.stdout | default('') | trim == 'masked'
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure the audit packages are installed"
+  become: true
+  ansible.builtin.package:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ devsecops_monitor_packages }}"
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure auditd is enabled and started"
+  become: true
+  ansible.builtin.systemd:
+    name: auditd
+    enabled: true
+    state: started
+
+- name: "{{ role_name }} | {{ task.name }} | Check the auditd service state"
+  become: true
+  ansible.builtin.command:
+    cmd: systemctl is-active auditd
+  register: result_auditd_active
+  changed_when: false
+  failed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when auditd did not start"
+  ansible.builtin.fail:
+    msg: >-
+      auditd is not active (state '{{ result_auditd_active.stdout | default('') | trim }}').
+      Inspect 'systemctl status auditd' and 'journalctl -u auditd' before
+      enabling path monitoring.
+  when: result_auditd_active.stdout | default('') | trim != 'active'
+
+- name: "{{ role_name }} | {{ task.name }} | Read the kernel audit state"
+  become: true
+  ansible.builtin.command:
+    cmd: auditctl -s
+  register: result_audit_state
+  changed_when: false
+  failed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when the audit state is unavailable"
+  ansible.builtin.fail:
+    msg: >-
+      'auditctl -s' failed: {{ result_audit_state.stderr | default('') | trim }}.
+      Kernel auditing is unavailable, so path monitoring cannot be enabled.
+  when: result_audit_state.rc | default(1) != 0
+
+- name: "{{ role_name }} | {{ task.name }} | Parse the kernel audit state"
+  ansible.builtin.set_fact:
+    _devsecops_monitor_audit_enabled: >-
+      {{ result_audit_state.stdout | default('')
+         | regex_findall('enabled[= ]+([0-9]+)')
+         | first | default('') }}
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when the audit state cannot be parsed"
+  ansible.builtin.fail:
+    msg: >-
+      Could not read the kernel audit state from 'auditctl -s':
+      '{{ result_audit_state.stdout | default('') | trim }}'
+      (stderr: '{{ result_audit_state.stderr | default('') | trim }}').
+  when: _devsecops_monitor_audit_enabled | length == 0
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when the audit configuration is immutable"
+  ansible.builtin.fail:
+    msg: >-
+      'auditctl -s' reports enabled 2: the audit configuration is immutable.
+      Reboot the host to clear the immutability, then re-run the playbook.
+  when: _devsecops_monitor_audit_enabled == '2'
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when kernel auditing is disabled"
+  ansible.builtin.fail:
+    msg: >-
+      'auditctl -s' reports enabled '{{ _devsecops_monitor_audit_enabled }}'
+      instead of 1. Kernel auditing is disabled. Boot with 'audit=1' (or omit
+      'audit=0' from the kernel command line), then re-run the playbook.
+  when: _devsecops_monitor_audit_enabled != '1'
+
+- name: "{{ role_name }} | {{ task.name }} | Manage the auditd retention settings"
+  become: true
+  ansible.builtin.lineinfile:
+    path: "{{ devsecops_monitor_auditd_conf }}"
+    regexp: '^#?\s*{{ item.key }}\s*='
+    line: '{{ item.key }} = {{ item.value }}'
+    state: present
+    backup: true
+  loop: "{{ devsecops_monitor_auditd_settings | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Reload the devsecops auditd configuration
+  when: devsecops_monitor_manage_auditd_conf | bool
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the audit rules"
+  become: true
+  ansible.builtin.template:
+    src: audit-monitor.rules.j2
+    dest: "{{ devsecops_monitor_rules_file }}"
+    owner: root
+    group: root
+    mode: '0640'
+    backup: true
+  notify: Reload the devsecops audit rules
+
+- name: "{{ role_name }} | {{ task.name }} | Apply the pending audit configuration and rules"
+  ansible.builtin.meta: flush_handlers
+
+- name: "{{ role_name }} | {{ task.name }} | Read the loaded audit rules"
+  become: true
+  ansible.builtin.command:
+    cmd: auditctl -l
+  register: result_monitor_loaded_rules
+  changed_when: false
+  failed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when the audit rules cannot be listed"
+  ansible.builtin.fail:
+    msg: >-
+      'auditctl -l' failed:
+      {{ result_monitor_loaded_rules.stderr | default('') | trim }}.
+      The generated audit rules cannot be verified.
+  when: result_monitor_loaded_rules.rc | default(1) != 0
+
+- name: "{{ role_name }} | {{ task.name }} | Detect disabled syscall auditing"
+  ansible.builtin.set_fact:
+    _devsecops_monitor_task_never: >-
+      {{ 'never,task' in result_monitor_loaded_rules.stdout }}
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when syscall auditing is disabled"
+  ansible.builtin.fail:
+    msg: >-
+      Syscall auditing is disabled by the '-a task,never' rule, usually in
+      {{ devsecops_monitor_rules_dir }}/audit.rules. The monitored-path rules
+      cannot fire while that rule is active. Remove or comment it out, or set
+      'devsecops_monitor_enable_syscall_auditing: true' to let this role
+      disable it.
+  when:
+    - _devsecops_monitor_task_never | bool
+    - not (devsecops_monitor_enable_syscall_auditing | bool)
+
+- name: "{{ role_name }} | {{ task.name }} | Find the rule files that disable task auditing"
+  become: true
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -rlE
+      - '^[[:space:]]*-a[[:space:]]+task,never[[:space:]]*$'
+      - "{{ devsecops_monitor_rules_dir }}"
+  register: result_monitor_task_never_files
+  changed_when: false
+  failed_when: false
+  when:
+    - _devsecops_monitor_task_never | bool
+    - devsecops_monitor_enable_syscall_auditing | bool
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when the disabling rule file cannot be located"
+  ansible.builtin.fail:
+    msg: >-
+      '-a task,never' is active but no matching rule file was found under
+      {{ devsecops_monitor_rules_dir }}
+      ({{ result_monitor_task_never_files.stderr | default('') | trim }}).
+      Remove the runtime rule with 'auditctl -d task,never' and make the
+      change persistent in your audit configuration.
+  when:
+    - _devsecops_monitor_task_never | bool
+    - devsecops_monitor_enable_syscall_auditing | bool
+    - result_monitor_task_never_files.stdout_lines | default([]) | length == 0
+
+- name: "{{ role_name }} | {{ task.name }} | Comment out the task,never rule"
+  become: true
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: '^\s*-a\s+task,never\s*$'
+    replace: '# -a task,never  # disabled by ansible-role-devsecops monitor_paths'
+    backup: true
+  loop: "{{ result_monitor_task_never_files.stdout_lines | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  when:
+    - _devsecops_monitor_task_never | bool
+    - devsecops_monitor_enable_syscall_auditing | bool
+  notify: Reload the devsecops audit rules
+
+- name: "{{ role_name }} | {{ task.name }} | Apply the syscall auditing change"
+  ansible.builtin.meta: flush_handlers
+  when:
+    - _devsecops_monitor_task_never | bool
+    - devsecops_monitor_enable_syscall_auditing | bool
+
+- name: "{{ role_name }} | {{ task.name }} | Re-read the loaded audit rules after enabling syscall auditing"
+  become: true
+  ansible.builtin.command:
+    cmd: auditctl -l
+  register: result_monitor_loaded_rules
+  changed_when: false
+  failed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when syscall auditing is still disabled"
+  ansible.builtin.fail:
+    msg: >-
+      Syscall auditing is still disabled by '-a task,never' after rewriting
+      {{ devsecops_monitor_rules_dir }}. Check the rule files and run
+      'augenrules --load' manually.
+  when:
+    - _devsecops_monitor_task_never | bool
+    - devsecops_monitor_enable_syscall_auditing | bool
+    - "'never,task' in result_monitor_loaded_rules.stdout"
+
+- name: "{{ role_name }} | {{ task.name }} | Find the monitored paths missing from the loaded rules"
+  ansible.builtin.set_fact:
+    _devsecops_monitor_missing_rules: >-
+      {{ _devsecops_monitor_validated_paths | default([])
+         | rejectattr('path', 'in', result_monitor_loaded_rules.stdout)
+         | list }}
+
+- name: "{{ role_name }} | {{ task.name }} | Load the audit rules when monitored paths are missing"
+  become: true
+  ansible.builtin.command:
+    cmd: augenrules --load
+  changed_when: true
+  when: _devsecops_monitor_missing_rules | length > 0
+
+- name: "{{ role_name }} | {{ task.name }} | Re-read the loaded audit rules"
+  become: true
+  ansible.builtin.command:
+    cmd: auditctl -l
+  register: result_monitor_loaded_rules
+  changed_when: false
+  failed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when a monitored path is not loaded"
+  ansible.builtin.fail:
+    msg: >-
+      Monitored path '{{ item.path }}' is not present in the kernel audit
+      rules. Check 'auditctl -l | grep devsecops' and 'augenrules --load'.
+      Loaded rules:
+      {{ result_monitor_loaded_rules.stdout | default('') }}
+  loop: "{{ _devsecops_monitor_validated_paths | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: item.path not in result_monitor_loaded_rules.stdout
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the audit watcher script"
+  become: true
+  ansible.builtin.copy:
+    src: scripts/audit_watch.py
+    dest: "{{ devsecops_monitor_script }}"
+    owner: root
+    group: root
+    mode: '0755'
+  notify: Restart the devsecops audit watcher
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the audit watcher configuration"
+  become: true
+  ansible.builtin.template:
+    src: audit-monitor.json.j2
+    dest: "{{ devsecops_monitor_config_file }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  notify: Restart the devsecops audit watcher
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the curated log rotation policy"
+  become: true
+  ansible.builtin.template:
+    src: devsecops-monitor.logrotate.j2
+    dest: "{{ devsecops_monitor_logrotate_file }}"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: "{{ role_name }} | {{ task.name }} | Deploy the audit watcher service"
+  become: true
+  ansible.builtin.template:
+    src: devsecops-audit-watch.service.j2
+    dest: "{{ devsecops_monitor_service_file }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart the devsecops audit watcher
+
+- name: "{{ role_name }} | {{ task.name }} | Ensure the audit watcher is enabled and started"
+  become: true
+  ansible.builtin.systemd:
+    name: "{{ devsecops_monitor_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: "{{ role_name }} | {{ task.name }} | Check the audit watcher service state"
+  become: true
+  ansible.builtin.command:
+    cmd: "systemctl is-active {{ devsecops_monitor_service_name }}"
+  register: result_monitor_service_active
+  changed_when: false
+  failed_when: false
+
+- name: "{{ role_name }} | {{ task.name }} | Fail when the audit watcher did not start"
+  ansible.builtin.fail:
+    msg: >-
+      {{ devsecops_monitor_service_name }} is not active (state
+      '{{ result_monitor_service_active.stdout | default('') | trim }}').
+      Inspect 'systemctl status {{ devsecops_monitor_service_name }}' and
+      'journalctl -u {{ devsecops_monitor_service_name }}'.
+  when: result_monitor_service_active.stdout | default('') | trim != 'active'
+...
