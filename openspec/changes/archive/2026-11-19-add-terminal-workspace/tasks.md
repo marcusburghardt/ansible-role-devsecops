@@ -41,7 +41,7 @@
 - [x] 6.2 Run `yamllint` over all new and modified YAML files and `ansible-lint` over the role; fix all findings. Verify both commands exit clean.
 - [x] 6.3 Run `ansible-playbook --syntax-check` with a test playbook enabling both tasks and four repo entries. Verify the syntax check passes.
 - [x] 6.4 Run the role twice against a test target with the tasks enabled; verify the second run reports no changes (idempotency) and `zellij setup --check` succeeds.
-- [ ] 6.5 Manual acceptance in a real kitty session: `oc-workspace` creates the 2×2 grid with named panes; detach and reattach preserves it; a permission prompt in one pane renames its title to the waiting badge and raises a notification; an idle turn shows the done badge and only notifies when the pane is unfocused. Verify each behavior in the live session.
+- [x] 6.5 Manual acceptance in a real kitty session: `oc-workspace` creates the 2×2 grid with named panes; detach and reattach preserves it; a permission prompt in one pane renames its title to the waiting badge and raises a notification; an idle turn shows the done badge and only notifies when the pane is unfocused. Verify each behavior in the live session.
 
 ## Workflow follow-up
 
