@@ -3,6 +3,8 @@
 
 import importlib.util
 import logging
+import os
+import pwd
 import unittest
 from pathlib import Path
 
@@ -88,6 +90,79 @@ class NotifyPolicyTests(unittest.TestCase):
             desktop_enabled=False,
         )
         self.assertFalse(notifier._should_notify({"result": "denied", "access": "read"}))
+
+
+class UserNameTests(unittest.TestCase):
+    def test_current_user(self):
+        expected = pwd.getpwuid(os.getuid()).pw_name
+        self.assertEqual(audit_watch._user_name(os.getuid()), expected)
+
+    def test_unset_audit_uid(self):
+        self.assertEqual(audit_watch._user_name(4294967295), "unset")
+
+    def test_unknown_user_falls_back(self):
+        self.assertEqual(audit_watch._user_name(2**31 - 1), str(2**31 - 1))
+
+
+class ParentLabelTests(unittest.TestCase):
+    def test_parent_label_includes_pid(self):
+        label = audit_watch._parent_label(os.getppid())
+        self.assertTrue(label.startswith(str(os.getppid())))
+
+
+class NotificationFormattingTests(unittest.TestCase):
+    def _event(self, **overrides):
+        event = {
+            "result": "denied",
+            "access": "read",
+            "path": "/etc/shadow",
+            "uid": 0,
+            "auid": 1,
+            "comm": "cat",
+            "exe": "/usr/bin/cat",
+            "pid": os.getpid(),
+            "ppid": os.getppid(),
+            "tty": "pts4",
+            "session": 3,
+            "errno": 13,
+            "key": "devsecops_shadow",
+        }
+        event.update(overrides)
+        return event
+
+    def test_denied_notification_identifies_user_and_process(self):
+        title, body, urgency = audit_watch._format_notification(self._event())
+        self.assertEqual(title, "Denied: cat -> /etc/shadow")
+        self.assertEqual(urgency, "critical")
+        self.assertIn("user: root (0)", body)
+        self.assertIn("login:", body)
+        self.assertIn("process: cat", body)
+        self.assertIn(f"parent {os.getppid()}", body)
+        self.assertIn("exe: /usr/bin/cat", body)
+        self.assertIn("read denied (EACCES)", body)
+        self.assertIn("tty pts4", body)
+        self.assertIn("session 3", body)
+
+    def test_success_read_notification(self):
+        title, body, urgency = audit_watch._format_notification(
+            self._event(result="success", errno=0)
+        )
+        self.assertEqual(title, "cat read /etc/shadow")
+        self.assertEqual(urgency, "normal")
+        self.assertNotIn("denied", body)
+
+    def test_metadata_notification(self):
+        title, _, _ = audit_watch._format_notification(
+            self._event(result="success", access="metadata", errno=0)
+        )
+        self.assertEqual(title, "cat changed /etc/shadow")
+
+    def test_journal_line_includes_context(self):
+        line = audit_watch._format_journal(self._event())
+        self.assertIn("uid=root (0)", line)
+        self.assertIn("auid=", line)
+        self.assertIn("tty=pts4", line)
+        self.assertIn("ses=3", line)
 
 
 if __name__ == "__main__":

@@ -18,6 +18,8 @@ from __future__ import annotations
 import argparse
 import collections
 import datetime
+import errno
+import functools
 import json
 import logging
 import logging.handlers
@@ -298,7 +300,8 @@ class Notifier:
 
         runtime_dir = f"/run/user/{user_id}"
         if os.path.basename(argv[0]) == "notify-send":
-            argv += ["-u", urgency, "-a", "devsecops", "-t", "10000"]
+            icon = "dialog-warning" if urgency == "critical" else "dialog-information"
+            argv += ["-u", urgency, "-a", "devsecops", "-t", "10000", "-i", icon]
         argv += [title, body]
         argv = [
             "runuser",
@@ -498,6 +501,8 @@ def build_event(lines, parser, config):
         "exe": _value(syscall_record, "exe"),
         "uid": _to_int(record_value(syscall_record, "uid")),
         "auid": _to_int(record_value(syscall_record, "auid")),
+        "tty": _value(syscall_record, "tty"),
+        "session": _to_int(record_value(syscall_record, "ses")),
         "key": key,
     }
 
@@ -507,24 +512,107 @@ def record_value(record, name):
     return _normalize(record["raw"].get(name))
 
 
+UNSET_AUID = 4294967295
+
+
+@functools.lru_cache(maxsize=128)
+def _user_name(uid):
+    if uid is None:
+        return "unknown"
+    if uid == UNSET_AUID:
+        return "unset"
+    try:
+        return pwd.getpwuid(uid).pw_name
+    except (KeyError, OSError):
+        return str(uid)
+
+
+def _user_label(uid):
+    if uid is None:
+        return "unknown"
+    return f"{_user_name(uid)} ({uid})"
+
+
+def _parent_label(ppid):
+    if not ppid:
+        return "unknown"
+    try:
+        with open(f"/proc/{ppid}/comm", encoding="utf-8", errors="replace") as handle:
+            comm = handle.read().strip()
+    except OSError:
+        return str(ppid)
+    return f"{ppid} {comm}" if comm else str(ppid)
+
+
+def _process_name(event):
+    exe = event.get("exe") or ""
+    name = os.path.basename(exe)
+    if name.endswith(" (deleted)"):
+        name = name[: -len(" (deleted)")]
+    return name or event.get("comm") or "unknown"
+
+
 def _format_notification(event):
+    process = _process_name(event)
+    access = event["access"]
     if event["result"] == "denied":
-        title = f"Denied: {event['path']}"
+        title = f"Denied: {process} -> {event['path']}"
         urgency = "critical"
     else:
-        title = f"Access: {event['path']}"
+        action = {"read": "read", "write": "wrote", "metadata": "changed"}.get(
+            access, access
+        )
+        title = f"{process} {action} {event['path']}"
         urgency = "normal"
-    identity = f"{event['comm'] or 'unknown'} (pid {event['pid']}) uid {event['uid']}"
-    body = f"{event['access']} {event['result']}\n{identity}"
+
+    user_line = f"user: {_user_label(event.get('uid'))}"
+    auid = event.get("auid")
+    if auid is not None and auid != event.get("uid") and auid != UNSET_AUID:
+        user_line += f", login: {_user_label(auid)}"
+
+    process_line = (
+        f"process: {process} "
+        f"(pid {event.get('pid', '?')}, parent {_parent_label(event.get('ppid'))})"
+    )
+
+    details = [f"exe: {event.get('exe') or 'unknown'}"]
+    if event["result"] == "denied":
+        errno_name = errno.errorcode.get(event.get("errno")) if event.get("errno") else None
+        suffix = f" ({errno_name})" if errno_name else ""
+        details.append(f"{access} denied{suffix}")
+    else:
+        details.append(access)
+    if event.get("tty") and event["tty"] != "(none)":
+        details.append(f"tty {event['tty']}")
+    session = event.get("session")
+    if session is not None and session != UNSET_AUID:
+        details.append(f"session {session}")
+
+    body = "\n".join([user_line, process_line, ", ".join(details)])
     return title, body, urgency
 
 
 def _format_journal(event):
+    process = _process_name(event)
+    auid = event.get("auid")
+    identity = (
+        f"pid={event.get('pid')}, parent={_parent_label(event.get('ppid'))}, "
+        f"uid={_user_label(event.get('uid'))}"
+    )
+    if auid is not None and auid != UNSET_AUID and auid != event.get("uid"):
+        identity += f", auid={_user_label(auid)}"
+
+    details = [f"exe={event.get('exe') or 'unknown'}"]
+    if event.get("tty") and event["tty"] != "(none)":
+        details.append(f"tty={event['tty']}")
+    session = event.get("session")
+    if session is not None and session != UNSET_AUID:
+        details.append(f"ses={session}")
+
     return (
         f"{event['result']} {event['access']} on {event['path']} "
-        f"by {event['comm'] or 'unknown'} "
-        f"(pid={event['pid']}, uid={event['uid']}, "
-        f"exe={event['exe'] or 'unknown'}, key={event['key']})"
+        f"by {process} ({identity}, {', '.join(details)}, "
+        f"key={event.get('key') or 'unknown'})"
     )
 
 

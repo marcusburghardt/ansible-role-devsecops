@@ -326,9 +326,9 @@ It contains `audit_log_file`, `log_file`, `key_prefix`, `paths`,
 `notify_throttle`, and `notify_command`. Each JSONL record contains `ts`,
 `path`, `access` (`read`, `write`, `metadata`, or `list`), `result`
 (`success`, `denied`, or `failed`), `errno`, `syscall`, `pid`, `ppid`, `comm`,
-`exe`, `uid`, `auid`, and `key`. Listing operations (stat, readdir, readlink,
-extended-attribute enumeration, and directory or `O_PATH` opens) are recorded
-with access type `list` but never raise notifications.
+`exe`, `uid`, `auid`, `tty`, `session`, and `key`. Listing operations (stat,
+readdir, readlink, extended-attribute enumeration, and directory or `O_PATH`
+opens) are recorded with access type `list` but never raise notifications.
 
 The `devsecops-audit-watch` service runs as root, starts after `auditd`,
 restarts automatically on failure, and follows audit log rotation. A watcher
@@ -353,13 +353,16 @@ the loaded rule set when the path still does not appear.
 
 Notifications are sent through the desktop user's session bus with
 `notify-send`, while every alert is also written to journald with the
-`devsecops-audit` identifier. Denied attempts always notify; successful
-content reads, writes, and metadata changes notify when they match
-`devsecops_monitor_notify_access`. Listing events are logged but never notify.
-Set that variable to `wa` to keep content reads in the log without desktop
-popups. When no graphical session exists the alerts remain visible in the
-journal, and a per-path/result throttle (default 30 per minute) suppresses
-bursts and reports the number of suppressed events in the next notification.
+`devsecops-audit` identifier. Notifications identify the OS user, the audit
+login user when different, the process and its parent, the executable, and the
+tty/session when available; denied alerts use a warning icon and critical
+urgency. Denied attempts always notify; successful content reads, writes, and
+metadata changes notify when they match `devsecops_monitor_notify_access`.
+Listing events are logged but never notify. Set that variable to `wa` to keep
+content reads in the log without desktop popups. When no graphical session
+exists the alerts remain visible in the journal, and a per-path/result throttle
+(default 30 per minute) suppresses bursts and reports the number of suppressed
+events in the next notification.
 
 Verify a deployment:
 
