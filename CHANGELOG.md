@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/marcusburghardt/ansible-role-devsecops/compare/v0.3.1...v0.4.0) (2026-11-19)
+
+
+### Features
+
+* add monitored file access auditing ([70134b9](https://github.com/marcusburghardt/ansible-role-devsecops/commit/70134b9b4eaa50a001cc51d36a6f7c31e523ee26))
+* enrich access notifications ([c7dfcf7](https://github.com/marcusburghardt/ansible-role-devsecops/commit/c7dfcf73dfabaf525670a2d34f9d340c11ffd76b))
+* exclude sensitive directories from LocalSearch ([f088b96](https://github.com/marcusburghardt/ansible-role-devsecops/commit/f088b969a090d1c329ed9cadc13cb4ea49521dce))
+
+
+### Documentation
+
+* **openspec:** add monitored file access changes ([ab46aa3](https://github.com/marcusburghardt/ansible-role-devsecops/commit/ab46aa302bc84bdc5920e46c656e5c816ffa9770))
+* **openspec:** archive add-terminal-workspace ([7e7824f](https://github.com/marcusburghardt/ansible-role-devsecops/commit/7e7824fb576b88b548f2ad1fdde54b0477bff3ce))
+* **openspec:** archive completed changes ([ab813ce](https://github.com/marcusburghardt/ansible-role-devsecops/commit/ab813cebe49d785ac7b80f9084d0799ce21ffb39))
+* **openspec:** fill archived capability purposes ([8093d56](https://github.com/marcusburghardt/ansible-role-devsecops/commit/8093d56872a6471b0b377a6128f02ca60550859d))
+
 ## [0.3.1](https://github.com/marcusburghardt/ansible-role-devsecops/compare/v0.3.0...v0.3.1) (2026-10-30)
 
 
