@@ -1,7 +1,8 @@
 # ci-workflows Specification
 
 ## Purpose
-TBD - created by archiving change standardize-role-structure. Update Purpose after archive.
+Continuous integration and release workflows for the role, including
+release-please pull requests and Ansible Galaxy publication.
 
 ## Requirements
 

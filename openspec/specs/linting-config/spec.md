@@ -1,7 +1,8 @@
 # linting-config Specification
 
 ## Purpose
-TBD - created by archiving change standardize-role-structure. Update Purpose after archive.
+Lint and formatting configuration that keeps the role's YAML, Ansible, and
+Python sources consistent across the repository.
 
 ## Requirements
 

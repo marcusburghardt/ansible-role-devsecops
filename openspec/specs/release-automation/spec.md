@@ -1,7 +1,8 @@
 # release-automation Specification
 
 ## Purpose
-TBD - created by archiving change standardize-role-structure. Update Purpose after archive.
+Automated semantic versioning, changelog generation, and release metadata
+managed by release-please.
 
 ## Requirements
 
